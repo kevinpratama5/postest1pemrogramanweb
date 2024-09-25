@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BuyCoin - Platform Trading</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <nav class="container">
+            <div class="logo">
+                <img src="buycoin-logo.png" alt="Logo BuyCoin">
+                BuyCoin
+            </div>
+            <ul class="nav-links">
+                <li><a href="#home">Home</a></li>
+                <li><a href="#about">About</a></li>
+            </ul>
+            <button class="sign-in-btn">Daftar</button>
+            <div class="hamburger">&#9776;</div>
+        </nav>
+    </header>
+
+    <main class="container">
+        <section id="home">
+            <div class="hero-content">
+                <h1>BuyCoin Blockchain</h1>
+                <p class="subtitle">Aman & Mudah melakukan trading</p>
+                <div class="cta-buttons">
+                    <button class="cta-btn primary-btn" onclick="showPopup('Mulai')">Mulai</button>
+                    <button class="cta-btn secondary-btn" onclick="showPopup('Whitepaper')">WHITEPAPER</button>
+                </div>
+            </div>
+
+            <div class="ico-card">
+                <h2>BuyCoin ICO:</h2>
+                <p>Diskon 33% dari harga asli</p>
+                <div class="progress-bar">
+                    <div class="progress"></div>
+                </div>
+                <div class="ico-details">
+                    <span>900K</span>
+                    <span>12M USD</span>
+                </div>
+                <p>Edisi token tetap 3,000,000 BITS</p>
+                <button class="buy-tokens-btn" onclick="showPopup('Beli Token')">BELI TOKEN</button>
+                <div class="payment-methods">
+                    <img src="visa-logo.png" alt="Visa">
+                    <img src="paypal-logo.png" alt="PayPal">
+                </div>
+            </div>
+        </section>
+
+        <section id="about" style="display: none;">
+            <h2>Tentang Saya</h2>
+            <p>Nama: Kevin Pratama</p>
+            <p>Pengalaman: 2 tahun dalam trading cryptocurrency</p>
+            <p>Visi: Membuat trading cryptocurrency dapat diakses oleh semua orang</p>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 BuyCoin. Hak cipta dilindungi undang-undang.</p>
+    </footer>
+
+    <button id="darkModeToggle">Aktifkan Mode Gelap</button>
+
+    <div id="popup" class="popup">
+        <div class="popup-content">
+            <span class="close">&times;</span>
+            <p id="popup-message"></p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
