@@ -1,0 +1,438 @@
+:root {
+    --primary-color: #4a148c;
+    --secondary-color: #7e57c2;
+    --text-color: #ffffff;
+    --background-color: #1a1a2e;
+    --card-background: white;
+    --card-text: #333;
+}
+
+body {
+    font-family: 'Arial', sans-serif;
+    margin: 0;
+    padding: 0;
+    background: linear-gradient(135deg, var(--background-color), var(--primary-color));
+    color: var(--text-color);
+    min-height: 100vh;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+header {
+    background-color: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    padding: 20px 0;
+}
+
+nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+.logo img {
+    width: 40px;
+    margin-right: 10px;
+}
+
+.nav-links {
+    display: flex;
+    list-style: none;
+}
+
+.nav-links li {
+    margin-left: 20px;
+}
+
+.nav-links a {
+    color: var(--text-color);
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.sign-in-btn, .cta-btn, .buy-tokens-btn {
+    background-color: var(--secondary-color);
+    color: var(--text-color);
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.hamburger {
+    display: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+main {
+    display: flex;
+    flex-direction: column;
+    gap: 50px;
+    align-items: center;
+    padding: 50px 0;
+}
+
+.hero-content {
+    flex: 1;
+}
+
+h1 {
+    font-size: 3rem;
+    margin-bottom: 20px;
+}
+
+.subtitle {
+    font-size: 1.2rem;
+    margin-bottom: 30px;
+}
+
+.cta-buttons {
+    display: flex;
+    gap: 20px;
+}
+
+.primary-btn {
+    background-color: var(--text-color);
+    color: var(--primary-color);
+}
+
+.ico-card {
+    background-color: var(--card-background);
+    color: var(--card-text);
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+    max-width: 350px;
+}
+
+.progress-bar {
+    background-color: #e0e0e0;
+    height: 10px;
+    border-radius: 5px;
+    margin: 20px 0;
+    overflow: hidden;
+}
+
+.progress {
+    background-color: var(--secondary-color);
+    width: 75%;
+    height: 100%;
+}
+
+.ico-details {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.payment-methods {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.payment-methods img {
+    height: 20px;
+    opacity: 0.5;
+}
+
+#darkModeToggle {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 10px;
+    background-color: var(--secondary-color);
+    color: var(--text-color);
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.popup {
+    display: none;
+    position: fixed;
+    z-index: 1;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.4);
+}
+
+.popup-content {
+    background-color: var(--card-background);
+    margin: 15% auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 80%;
+    max-width: 500px;
+    border-radius: 10px;
+    position: relative;
+}
+
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+input[type="text"], input[type="email"], input[type="password"], input[type="number"], select {
+    padding: 10px;
+    border: 2px solid var(--primary-color);
+    border-radius: 5px;
+    background-color: #f0f4f8;
+    color: #333;
+    font-size: 1rem;
+    transition: border-color 0.3s, background-color 0.3s;
+}
+
+input[type="text"]:hover, input[type="email"]:hover, input[type="password"]:hover, input[type="number"]:hover, select:hover {
+    background-color: #e1e7f0;
+}
+
+input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus, input[type="number"]:focus, select:focus {
+    border-color: var(--secondary-color);
+    background-color: #ffffff;
+    outline: none;
+}
+
+button.submit-btn {
+    background-color: var(--primary-color);
+    color: #fff;
+    border: none;
+    padding: 10px 15px;
+    font-size: 1rem;
+    font-weight: bold;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+button.submit-btn:hover {
+    background-color: var(--secondary-color);
+}
+
+/* Styling khusus untuk halaman edit */
+.edit-container {
+    background-color: var(--card-background);
+    color: var(--card-text);
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+    max-width: 600px;
+    margin: 50px auto;
+}
+
+.edit-title {
+    font-size: 2rem;
+    margin-bottom: 20px;
+    color: var(--primary-color);
+    text-align: center;
+}
+
+.edit-form-group {
+    margin-bottom: 15px;
+}
+
+.edit-form-group label {
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: var(--primary-color);
+}
+
+.edit-form-group input, 
+.edit-form-group select, 
+.edit-form-group input[type="file"] {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid var(--primary-color);
+    border-radius: 5px;
+    background-color: #f0f4f8;
+    transition: border-color 0.3s, background-color 0.3s;
+}
+
+.edit-form-group input:focus, 
+.edit-form-group select:focus {
+    border-color: var(--secondary-color);
+    background-color: #ffffff;
+    outline: none;
+}
+
+.edit-submit-btn, .edit-cancel-btn {
+    width: 100%;
+    padding: 12px;
+    font-size: 1rem;
+    font-weight: bold;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    margin-top: 10px;
+}
+
+.edit-submit-btn {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.edit-submit-btn:hover {
+    background-color: var(--secondary-color);
+}
+
+.edit-cancel-btn {
+    background-color: var(--secondary-color);
+    color: white;
+}
+
+.edit-cancel-btn:hover {
+    background-color: var(--primary-color);
+}
+
+/* Styling untuk tabel di halaman read.php */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    background-color: var(--card-background);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+thead {
+    background-color: var(--primary-color);
+    color: var(--text-color);
+    text-align: left;
+    font-weight: bold;
+}
+
+thead th {
+    padding: 15px;
+    text-align: center;
+}
+
+tbody tr {
+    border-bottom: 1px solid #ddd;
+}
+
+tbody tr:nth-child(even) {
+    background-color: #f2f2f2;
+}
+
+tbody tr:hover {
+    background-color: var(--secondary-color);
+    color: var(--text-color);
+    transition: background-color 0.3s;
+}
+
+tbody td {
+    padding: 15px;
+    text-align: center;
+    color: var(--card-text);
+    font-size: 1rem;
+}
+
+/* Styling untuk link aksi di dalam tabel */
+a {
+    text-decoration: none;
+    font-weight: bold;
+    color: var(--primary-color);
+    transition: color 0.3s;
+}
+
+a:hover {
+    color: var(--secondary-color);
+}
+    tbody tr {
+        margin-bottom: 15px;
+    }
+
+    td {
+        text-align: right;
+        padding-left: 50%;
+        position: relative;
+    }
+
+    td::before {
+        content: attr(data-label);
+        position: absolute;
+        left: 10px;
+        text-align: left;
+        font-weight: bold;
+    }
+
+    /* Styling untuk link di kolom aksi */
+td a {
+    text-decoration: none;
+    font-weight: bold;
+    font-size: 1rem;
+    color: #4a148c; /* Warna default */
+    transition: color 0.3s, opacity 0.3s;
+}
+
+td a:hover {
+    color: #7e57c2; /* Warna saat di-hover */
+}
+
+td a.edit-link {
+    color: gray; /* Warna khusus untuk link Edit */
+    opacity: 0.7;
+}
+
+td a.edit-link:hover {
+    opacity: 1;
+    color: #7e57c2; /* Warna hover untuk Edit */
+}
+
+td a.hapus-link {
+    color: #0d47a1; /* Warna khusus untuk link Hapus */
+}
+
+td a.hapus-link:hover {
+    color: red; /* Warna merah saat hover untuk Hapus */
+}
+
+
+
+/* Responsif */
+@media (max-width: 768px) {
+    .edit-container {
+        padding: 20px;
+    }
+
+    .edit-title {
+        font-size: 1.5rem;
+    }
+}
