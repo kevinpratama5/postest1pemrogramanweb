@@ -24,15 +24,15 @@
 <div class="card">
   <h3>Blob URL — Shows Parent Origin in Address Bar</h3>
   <p style="color:#8b949e;font-size:13px;margin-bottom:12px">
-    A blob URL created from <code>https://trusted.com</code> displays as <code>blob:https://trusted.com/uuid</code>.
-    The user sees "trusted.com" — but content is 100% controlled by who created the blob.
+    A blob URL created from <code>https://accounts.google.com</code> displays as <code>blob:https://accounts.google.com/uuid</code>.
+    The user sees "accounts.google.com" — but content is 100% controlled by who created the blob (via XSS on Google).
   </p>
-  <pre>// If you have ANY code execution on trusted.com (XSS, etc.):
-const html = '&lt;h1&gt;Attacker content&lt;/h1&gt;&lt;form&gt;Enter credentials: &lt;input&gt;&lt;/form&gt;';
+  <pre>// If you have ANY code execution on accounts.google.com (XSS, etc.):
+const html = '&lt;h1&gt;Fake Google Login&lt;/h1&gt;&lt;form&gt;Enter credentials: &lt;input&gt;&lt;/form&gt;';
 const blob = new Blob([html], {type: 'text/html'});
 const url = URL.createObjectURL(blob);
-// url = "blob:https://trusted.com/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-window.open(url); // Shows trusted.com in address bar!</pre>
+// url = "blob:https://accounts.google.com/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+window.open(url); // Shows accounts.google.com in address bar!</pre>
   <button class="btn" onclick="testBlob()">▶ Test Blob URL</button>
   <div class="log" id="log1">Ready...</div>
 </div>
@@ -94,7 +94,7 @@ function testBlob() {
     <input type="password" placeholder="Enter your password" style="width:100%;padding:12px;border:1px solid #dadce0;border-radius:4px;font-size:16px;margin-bottom:20px;box-sizing:border-box">
     <button style="width:100%;padding:12px;background:#1a73e8;color:white;border:none;border-radius:4px;font-size:16px;cursor:pointer">Next</button>
     <p style="text-align:center;margin-top:20px;font-size:12px;color:#f44336">
-      ⚠ RESEARCH DEMO: Address bar shows blob:${location.origin}/...
+      ⚠ RESEARCH PoC — Real attack: blob created from accounts.google.com shows google.com in address bar
     </p>
   </div>
 </body></html>`;
@@ -110,6 +110,7 @@ function testBlob() {
     log(1, blobURL, '#58a6ff');
   } else {
     log(1, '✓ Opened! Check address bar — it shows origin: ' + location.origin, '#3fb950');
+    log(1, 'In real attack: if XSS on accounts.google.com, blob URL shows google.com', '#e3b341');
     log(1, 'Full blob URL: ' + blobURL, '#8b949e');
   }
 }
