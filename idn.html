@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>IDN Homograph Attack PoC</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #0d1117; color: #e6edf3; padding: 30px; }
+  h1 { color: #f0883e; }
+  .meta { color: #8b949e; margin-bottom: 24px; font-size: 14px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin: 16px 0; }
+  h3 { color: #58a6ff; margin-bottom: 10px; }
+  pre { background: #0d1117; padding: 14px; border-radius: 6px; font-size: 13px; color: #c9d1d9; overflow-x: auto; white-space: pre-wrap; }
+  .btn { padding: 10px 18px; background: #238636; color: white; border: none; border-radius: 6px;
+         cursor: pointer; font-size: 13px; margin-right: 8px; margin-top: 8px; }
+  .btn.b { background: #1f6feb; }
+  .btn.r { background: #9333ea; }
+  input[type=text] { background: #0d1117; border: 1px solid #30363d; color: #e6edf3; padding: 10px 14px;
+                     border-radius: 6px; font-size: 14px; width: 100%; box-sizing: border-box; font-family: monospace; }
+  .log { background: #0d1117; border-radius: 6px; padding: 12px; margin-top: 12px; font-family: monospace;
+         font-size: 12px; min-height: 60px; max-height: 180px; overflow-y: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: #21262d; padding: 8px 12px; text-align: left; color: #8b949e; }
+  td { padding: 8px 12px; border-bottom: 1px solid #21262d; }
+  .vuln { color: #f85149; font-weight: bold; }
+  .safe { color: #3fb950; }
+  .homograph { font-size: 22px; letter-spacing: 2px; color: #e3b341; font-family: 'Arial Unicode MS', sans-serif; }
+  .url-display { background: #21262d; padding: 14px; border-radius: 6px; font-family: monospace; font-size: 15px; margin: 8px 0; word-break: break-all; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-right: 4px; }
+  .tag-patch { background: #3fb95020; color: #3fb950; border: 1px solid #3fb95040; }
+  .tag-vuln { background: #f8514920; color: #f85149; border: 1px solid #f8514940; }
+</style>
+</head>
+<body>
+<h1>🌐 IDN Homograph Attack PoC</h1>
+<div class="meta">Unicode lookalike domains · Punycode bypass · Browser IDN rendering policy</div>
+
+<div class="card">
+  <h3>What is IDN Homograph?</h3>
+  <p style="color:#8b949e;font-size:13px;line-height:1.7">
+    Internationalized Domain Names (IDN) allow Unicode characters in domain names.
+    Many Unicode characters are <em>visually identical</em> to ASCII characters.
+    An attacker registers a domain using lookalike chars — the browser displays it
+    as the real domain, but it actually points to the attacker's server.
+  </p>
+  <pre>Real:     google.com  (all ASCII)
+Fake:     ɡoogle.com  (U+0261 LATIN SMALL LETTER SCRIPT G — looks identical!)
+Punycode: xn--oogle-qmc.com  (what DNS actually sees)
+
+Real:     apple.com
+Fake:     аpple.com   (U+0430 CYRILLIC SMALL LETTER A — identical to ASCII 'a')
+Punycode: xn--pple-43d.com</pre>
+</div>
+
+<!-- Common homograph table -->
+<div class="card">
+  <h3>📋 High-Value Homograph Characters</h3>
+  <table>
+    <tr><th>Target Char</th><th>Lookalike</th><th>Unicode</th><th>Script</th><th>Example Domain</th></tr>
+    <tr>
+      <td><code>a</code> (U+0061)</td>
+      <td class="homograph">а</td>
+      <td>U+0430</td>
+      <td>Cyrillic</td>
+      <td>аpple.com → xn--pple-43d.com</td>
+    </tr>
+    <tr>
+      <td><code>e</code> (U+0065)</td>
+      <td class="homograph">е</td>
+      <td>U+0435</td>
+      <td>Cyrillic</td>
+      <td>facеbook.com → xn--facbook-e1a.com</td>
+    </tr>
+    <tr>
+      <td><code>o</code> (U+006F)</td>
+      <td class="homograph">о</td>
+      <td>U+043E</td>
+      <td>Cyrillic</td>
+      <td>micrоsoft.com → xn--micrsoft-f2a.com</td>
+    </tr>
+    <tr>
+      <td><code>p</code> (U+0070)</td>
+      <td class="homograph">р</td>
+      <td>U+0440</td>
+      <td>Cyrillic</td>
+      <td>раypal.com</td>
+    </tr>
+    <tr>
+      <td><code>c</code> (U+0063)</td>
+      <td class="homograph">с</td>
+      <td>U+0441</td>
+      <td>Cyrillic</td>
+      <td>сhase.com</td>
+    </tr>
+    <tr>
+      <td><code>x</code> (U+0078)</td>
+      <td class="homograph">х</td>
+      <td>U+0445</td>
+      <td>Cyrillic</td>
+      <td>хbox.com</td>
+    </tr>
+    <tr>
+      <td><code>g</code> (U+0067)</td>
+      <td class="homograph">ɡ</td>
+      <td>U+0261</td>
+      <td>IPA</td>
+      <td>ɡoogle.com → xn--oogle-qmc.com</td>
+    </tr>
+    <tr>
+      <td><code>i</code> (U+0069)</td>
+      <td class="homograph">і</td>
+      <td>U+0456</td>
+      <td>Cyrillic</td>
+      <td>twіtter.com</td>
+    </tr>
+    <tr>
+      <td><code>l</code> (U+006C)</td>
+      <td class="homograph">ⅼ</td>
+      <td>U+217C</td>
+      <td>Roman num.</td>
+      <td>paypaⅼ.com</td>
+    </tr>
+    <tr>
+      <td><code>0</code> (U+0030)</td>
+      <td class="homograph">О</td>
+      <td>U+041E</td>
+      <td>Cyrillic O</td>
+      <td>bankОfamerica.com</td>
+    </tr>
+  </table>
+</div>
+
+<!-- Pre-built examples -->
+<div class="card">
+  <h3>🔨 Pre-Built Spoofing Examples</h3>
+  <p style="color:#8b949e;font-size:13px;margin-bottom:16px">
+    These show what an IDN attack looks like. Paste these into browser address bars to test rendering.
+    <strong>Note:</strong> The domains below likely don't exist — this demonstrates the <em>visual</em> attack.
+  </p>
+  <div id="examples"></div>
+</div>
+
+<!-- Custom generator -->
+<div class="card">
+  <h3>⚙️ Custom Homograph Generator</h3>
+  <p style="color:#8b949e;font-size:13px;margin-bottom:12px">Enter a real domain to generate Unicode lookalike variants:</p>
+  <input type="text" id="domainInput" placeholder="e.g., google.com, facebook.com, paypal.com" value="google.com">
+  <div style="margin-top:8px">
+    <button class="btn" onclick="generateHomographs()">Generate Variants</button>
+    <button class="btn b" onclick="checkPunycode()">Convert to Punycode</button>
+  </div>
+  <div class="log" id="genLog">Enter a domain and click Generate...</div>
+</div>
+
+<!-- Browser rendering test -->
+<div class="card">
+  <h3>🌐 Browser IDN Rendering Behavior</h3>
+  <table>
+    <tr><th>Browser</th><th>IDN Policy</th><th>Renders Unicode?</th><th>Notes</th></tr>
+    <tr>
+      <td>Chrome (desktop)</td>
+      <td class="safe">Shows Punycode if confusable</td>
+      <td><span class="safe">Protected</span></td>
+      <td>Uses per-script confusability matrix (ICANN rules)</td>
+    </tr>
+    <tr>
+      <td>Firefox (desktop)</td>
+      <td class="safe">Shows Punycode if confusable</td>
+      <td><span class="safe">Protected</span></td>
+      <td>TLD-based allowlist for IDN rendering</td>
+    </tr>
+    <tr>
+      <td>Safari (macOS)</td>
+      <td class="safe">Shows Punycode for single-script attacks</td>
+      <td><span class="safe">Mostly protected</span></td>
+      <td>Edge cases exist with mixed scripts</td>
+    </tr>
+    <tr>
+      <td>Chrome (Android)</td>
+      <td class="vuln">May show Unicode in some cases</td>
+      <td><span class="vuln">Test!</span></td>
+      <td>Mobile address bar smaller → less visible</td>
+    </tr>
+    <tr>
+      <td>Firefox Focus/Klar</td>
+      <td class="vuln">Stripped browser, fewer checks</td>
+      <td><span class="vuln">Test!</span></td>
+      <td>Privacy browser with simplified UI</td>
+    </tr>
+    <tr>
+      <td>Samsung Internet</td>
+      <td class="vuln">Often lags Chrome security</td>
+      <td><span class="vuln">Test!</span></td>
+      <td>4-12 week patch lag from Chromium</td>
+    </tr>
+    <tr>
+      <td>Opera Mini</td>
+      <td class="vuln">Highly stripped browser</td>
+      <td><span class="vuln">Test!</span></td>
+      <td>Proxy-based rendering, different IDN handling</td>
+    </tr>
+    <tr>
+      <td>UC Browser</td>
+      <td class="vuln">Minimal security updates</td>
+      <td><span class="vuln">Likely vulnerable</span></td>
+      <td>Popular in Asia, very old Chromium base</td>
+    </tr>
+    <tr>
+      <td>Arc Browser</td>
+      <td class="vuln">New browser, unknown IDN policy</td>
+      <td><span class="vuln">Test!</span></td>
+      <td>Custom UI — sidebar address bar rendering</td>
+    </tr>
+  </table>
+</div>
+
+<!-- Detect current behavior -->
+<div class="card">
+  <h3>🔍 Test Current Browser IDN Handling</h3>
+  <p style="color:#8b949e;font-size:13px;margin-bottom:12px">
+    Click to open test URLs and observe what your browser shows in the address bar:
+  </p>
+  <button class="btn" onclick="testIDN('http://xn--oogle-qmc.com', 'ɡoogle.com (IPA script g)')">Test: ɡoogle.com variant</button>
+  <button class="btn b" onclick="testIDN('http://xn--pple-43d.com', 'аpple.com (Cyrillic a)')">Test: аpple.com variant</button>
+  <button class="btn r" onclick="testIDN('http://xn--facbook-e1a.com', 'facеbook.com (Cyrillic e)')">Test: facеbook.com variant</button>
+  <div class="log" id="testLog">Click a test above — observe the address bar in the new window...</div>
+  <div class="log" id="currentBrowser" style="margin-top:8px">Checking browser...</div>
+</div>
+
+<!-- Testing methodology -->
+<div class="card">
+  <h3>📋 Testing Methodology</h3>
+  <pre style="color:#c9d1d9">STEP 1: Generate homograph domain
+  → Use generator above OR: https://www.idn-checker.com/
+
+STEP 2: Register the Punycode domain (for real test)
+  → Buy xn--[generated].com on Namecheap/GoDaddy
+  → Point to your server
+
+STEP 3: Test in each browser
+  → Desktop: Chrome, Firefox, Edge, Brave, Opera, Arc
+  → Mobile: Chrome Android, Firefox Android, Samsung Internet
+  → iOS: Safari, Chrome iOS, Firefox Focus
+
+STEP 4: For each browser note:
+  → Does address bar show Unicode (attack works) or Punycode (protected)?
+  → Does any security indicator change (lock icon, color)?
+  → Is there any warning shown to user?
+
+STEP 5: If browser shows Unicode (attack works):
+  → Document browser name and version
+  → Screenshot address bar showing fake domain
+  → Compare: does Chrome protect? What's the delta?
+
+STEP 6: Report
+  → Browser VRP: different report for each browser
+  → Include: screenshot showing Unicode display
+  → Include: Punycode representation for clarity
+  → Reference: related CVE to establish precedent</pre>
+</div>
+
+<script>
+const HOMOGRAPH_MAP = {
+  'a': ['а','ɑ','α','ａ'],  // U+0430 Cyrillic, U+0251 IPA, U+03B1 Greek, U+FF41 fullwidth
+  'b': ['Ь','ƅ','ｂ'],
+  'c': ['с','ϲ','ｃ'],       // U+0441 Cyrillic, U+03F2 Greek
+  'd': ['ԁ','ⅾ','ｄ'],       // U+0501 Cyrillic
+  'e': ['е','ε','ｅ'],       // U+0435 Cyrillic, U+03B5 Greek
+  'g': ['ɡ','ｇ'],           // U+0261 IPA
+  'h': ['һ','ｈ'],           // U+04BB Cyrillic
+  'i': ['і','ι','ｉ'],       // U+0456 Cyrillic, U+03B9 Greek
+  'j': ['ϳ','ｊ'],
+  'k': ['κ','ｋ'],           // U+03BA Greek
+  'l': ['ⅼ','ｌ','ǀ'],      // U+217C Roman, U+007C pipe
+  'm': ['ｍ','м'],
+  'n': ['ｎ','η'],           // U+03B7 Greek
+  'o': ['о','ο','ｏ'],       // U+043E Cyrillic, U+03BF Greek
+  'p': ['р','ρ','ｐ'],       // U+0440 Cyrillic, U+03C1 Greek
+  'q': ['ｑ'],
+  'r': ['г','ｒ'],
+  's': ['ѕ','ｓ'],           // U+0455 Cyrillic
+  't': ['τ','ｔ'],           // U+03C4 Greek
+  'u': ['υ','ｕ'],           // U+03C5 Greek
+  'v': ['ν','ｖ'],           // U+03BD Greek
+  'w': ['ω','ｗ'],           // U+03C9 Greek
+  'x': ['х','χ','ｘ'],       // U+0445 Cyrillic, U+03C7 Greek
+  'y': ['у','γ','ｙ'],       // U+0443 Cyrillic, U+03B3 Greek
+  'z': ['ｚ'],
+};
+
+function generateHomographs() {
+  const domain = document.getElementById('domainInput').value.trim();
+  if (!domain) return;
+
+  const log = document.getElementById('genLog');
+  log.innerHTML = '';
+
+  const [name, ...tld] = domain.split('.');
+  const tldStr = '.' + tld.join('.');
+
+  // Generate single-char substitutions
+  const variants = [];
+
+  for (let i = 0; i < name.length; i++) {
+    const ch = name[i].toLowerCase();
+    const replacements = HOMOGRAPH_MAP[ch] || [];
+
+    for (const rep of replacements) {
+      const newName = name.slice(0, i) + rep + name.slice(i+1);
+      const variant = newName + tldStr;
+      variants.push({
+        domain: variant,
+        original: name[i],
+        replacement: rep,
+        position: i,
+        unicode: `U+${rep.codePointAt(0).toString(16).toUpperCase().padStart(4,'0')}`
+      });
+    }
+  }
+
+  if (variants.length === 0) {
+    log.innerHTML = '<span style="color:#f85149">No homographs found for this domain. Try: google.com, facebook.com, apple.com</span>';
+    return;
+  }
+
+  log.innerHTML += `<span style="color:#8b949e">Found ${variants.length} variants for "${domain}":\n\n</span>`;
+
+  variants.slice(0, 20).forEach(v => {
+    log.innerHTML += `<span style="color:#3fb950">✓</span> <span style="color:#e6edf3;font-size:16px">${v.domain}</span>  `;
+    log.innerHTML += `<span style="color:#8b949e">← char '${v.original}' → '${v.replacement}' (${v.unicode}) at pos ${v.position}</span>\n`;
+  });
+
+  log.innerHTML += `\n<span style="color:#e3b341">Paste these domains in browser address bar to test IDN rendering!</span>`;
+}
+
+function checkPunycode() {
+  const domain = document.getElementById('domainInput').value.trim();
+  if (!domain) return;
+
+  const log = document.getElementById('genLog');
+
+  // Use URL API to get Punycode representation
+  try {
+    const url = new URL('http://' + domain);
+    log.innerHTML = `<span style="color:#58a6ff">Input:    ${domain}\n`;
+    log.innerHTML += `Hostname: ${url.hostname}\n</span>`;
+
+    if (url.hostname !== domain.toLowerCase()) {
+      log.innerHTML += `<span style="color:#3fb950">✓ Contains Unicode — browser converted to: ${url.hostname}</span>\n`;
+      log.innerHTML += `<span style="color:#e3b341">Punycode (what DNS sees): ${url.hostname}</span>`;
+    } else {
+      log.innerHTML += `<span style="color:#8b949e">No Unicode detected — domain is pure ASCII.</span>`;
+    }
+  } catch(e) {
+    log.innerHTML = `<span style="color:#f85149">Error: ${e.message}</span>`;
+  }
+}
+
+function testIDN(url, label) {
+  const log = document.getElementById('testLog');
+  log.innerHTML += `<span style="color:#e3b341">[${new Date().toLocaleTimeString()}] Testing: ${label}\n</span>`;
+  log.innerHTML += `<span style="color:#8b949e">URL: ${url}\nOpening new window — check address bar!\n\n</span>`;
+
+  const w = window.open(url, '_blank');
+  if (!w) {
+    log.innerHTML += `<span style="color:#f85149">Popup blocked! Allow popups or copy URL manually.\n</span>`;
+  }
+}
+
+function buildExamples() {
+  const examples = [
+    {
+      real: 'google.com',
+      fake: 'ɡoogle.com',
+      unicode: 'U+0261 (IPA script g)',
+      punycode: 'xn--oogle-qmc.com',
+      note: 'The "g" is a different character — identical visually in most fonts'
+    },
+    {
+      real: 'apple.com',
+      fake: 'аpple.com',
+      unicode: 'U+0430 (Cyrillic a)',
+      punycode: 'xn--pple-43d.com',
+      note: 'Cyrillic "а" — nearly impossible to distinguish from Latin "a"'
+    },
+    {
+      real: 'facebook.com',
+      fake: 'facеbook.com',
+      unicode: 'U+0435 (Cyrillic e)',
+      punycode: 'xn--facbook-e1a.com',
+      note: 'Cyrillic "е" in position 4 — looks exactly like ASCII "e"'
+    },
+    {
+      real: 'paypal.com',
+      fake: 'раypal.com',
+      unicode: 'U+0440 (Cyrillic р)',
+      punycode: 'xn--aypal-ura.com',
+      note: 'Cyrillic "р" = Latin "p" — same glyph in most fonts'
+    },
+    {
+      real: 'twitter.com (X)',
+      fake: 'twіtter.com',
+      unicode: 'U+0456 (Cyrillic і)',
+      punycode: 'xn--twtter-0xa.com',
+      note: 'Dotted Cyrillic "і" — identical to Latin "i" at small sizes'
+    },
+  ];
+
+  const container = document.getElementById('examples');
+  examples.forEach(e => {
+    container.innerHTML += `
+<div style="margin-bottom:16px;padding:14px;background:#0d1117;border-radius:6px;border:1px solid #21262d">
+  <div style="margin-bottom:8px">
+    <span style="color:#8b949e;font-size:12px">REAL: </span>
+    <span style="color:#3fb950;font-size:18px;font-weight:bold">${e.real}</span>
+    <span style="color:#8b949e;font-size:12px;margin-left:16px">FAKE: </span>
+    <span style="color:#f85149;font-size:18px;font-weight:bold">${e.fake}</span>
+  </div>
+  <div style="color:#8b949e;font-size:12px">
+    <span style="margin-right:16px">Unicode: <span style="color:#e3b341">${e.unicode}</span></span>
+    <span>Punycode: <span style="color:#58a6ff">${e.punycode}</span></span>
+  </div>
+  <div style="color:#8b949e;font-size:12px;margin-top:4px">⚠ ${e.note}</div>
+</div>`;
+  });
+}
+
+// Browser detection
+function detectBrowser() {
+  const ua = navigator.userAgent;
+  const el = document.getElementById('currentBrowser');
+
+  let browser = ua.includes('Edg/') ? 'Edge' :
+                ua.includes('OPR/') ? 'Opera' :
+                ua.includes('Chrome/') ? 'Chrome' :
+                ua.includes('Firefox/') ? 'Firefox' :
+                ua.includes('Safari/') ? 'Safari' : 'Unknown';
+
+  const version = (ua.match(/(?:Chrome|Firefox|Edg|OPR|Safari)\/([\d.]+)/) || [])[1] || '';
+
+  el.innerHTML = `<span style="color:#58a6ff">Current browser: ${browser} ${version}</span>
+<span style="color:#8b949e">
+IDN protection: Chrome ≥53, Firefox ≥15 (with confusable check), Safari ≥15 protect against most homographs.
+Older browsers and mobile variants may still render homographs as Unicode.
+</span>`;
+}
+
+buildExamples();
+detectBrowser();
+</script>
+</body>
+</html>
