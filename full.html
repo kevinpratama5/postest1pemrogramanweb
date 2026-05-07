@@ -243,8 +243,9 @@ document.addEventListener('keydown', e => {
     e.stopPropagation();
   }
 }, true); // useCapture: true — handler kita jalan sebelum lainnya</pre>
-  <button class="btn btn-blue" onclick="tech6_keyintercept()">▶ Aktifkan ESC/F11 Intercept</button>
+  <button class="btn btn-blue" onclick="tech6_keyintercept()">Aktifkan Ulang</button>
   <button class="btn btn-gray" onclick="tech6_disable()">Matikan</button>
+  <span style="color:#3fb950;font-size:12px;margin-left:8px">● Auto-aktif saat page load</span>
   <div class="log" id="log6"></div>
 </div>
 
@@ -815,6 +816,47 @@ function detectBrowser() {
 }
 
 detectBrowser();
+
+// ─── Auto-activate F11 intercept on page load ─────────────────────────────
+// Tidak perlu klik tombol — langsung aktif saat halaman dibuka
+// Sehingga F11 sudah diblock sebelum user klik apapun
+(function autoF11Block() {
+  keyHandler = function(e) {
+    if (e.key === 'F11') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      log(6, '⌨ F11 dicegah (auto-intercept aktif sejak page load)!', 'ok');
+      setResult('f11Status', 'BLOCKED ✓', 'vuln');
+    }
+    if (e.key === 'Escape' && document.fullscreenElement) {
+      log(6, '⌨ ESC terdeteksi — mencoba re-enter fullscreen...', 'warn');
+      clearTimeout(tech6ReenterTimeout);
+      tech6ReenterTimeout = setTimeout(() => {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen({ navigationUI: 'hide' })
+            .then(() => {
+              showSpoof();
+              log(6, '✓ Re-entered fullscreen setelah ESC!', 'ok');
+            })
+            .catch(err => {
+              log(6, '✗ Re-enter gagal: ' + err.message, 'err');
+            });
+        }
+      }, 100);
+    }
+  };
+  document.addEventListener('keydown', keyHandler, true);
+  keyInterceptActive = true;
+
+  // Update UI to reflect auto-active state
+  setResult('f11Status', 'Auto-aktif ✓', 'vuln');
+  // Log into log6 after DOM is ready
+  requestAnimationFrame(() => {
+    log(6, '✓ Keyboard intercept AUTO-AKTIF sejak page load', 'ok');
+    log(6, '→ F11 sudah diblok — coba tekan F11 sekarang', 'info');
+    log(6, '→ ESC intercept juga aktif (detect + coba re-enter)', 'info');
+  });
+})();
 </script>
 </body>
 </html>
