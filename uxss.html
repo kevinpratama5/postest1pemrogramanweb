@@ -60,34 +60,34 @@ iframe.test-frame{border:1px solid var(--border);border-radius:4px;width:100%;he
 <nav class="sidebar">
   <div class="nav-brand"><div class="t">UXSS Lab</div><div class="s">Browser VRP · 2026</div></div>
   <div class="nav-section">Overview</div>
-  <div class="nav-item active" onclick="show('overview')">📊 Dashboard</div>
+  <div class="nav-item active" onclick="show('overview', this)">📊 Dashboard</div>
   <div class="nav-section">javascript: URI</div>
-  <div class="nav-item" onclick="show('js1')">U1 · iframe src</div>
-  <div class="nav-item" onclick="show('js2')">U2 · window.open</div>
-  <div class="nav-item" onclick="show('js3')">U3 · location after nav</div>
-  <div class="nav-item" onclick="show('js4')">U4 · a[href] click</div>
+  <div class="nav-item" onclick="show('js1', this)">U1 · iframe src</div>
+  <div class="nav-item" onclick="show('js2', this)">U2 · window.open</div>
+  <div class="nav-item" onclick="show('js3', this)">U3 · location after nav</div>
+  <div class="nav-item" onclick="show('js4', this)">U4 · a[href] click</div>
   <div class="nav-section">about: / blob: / data:</div>
-  <div class="nav-item" onclick="show('ab1')">U5 · about:blank inherit</div>
-  <div class="nav-item" onclick="show('ab2')">U6 · blob: cross-origin</div>
-  <div class="nav-item" onclick="show('ab3')">U7 · srcdoc parent access</div>
+  <div class="nav-item" onclick="show('ab1', this)">U5 · about:blank inherit</div>
+  <div class="nav-item" onclick="show('ab2', this)">U6 · blob: cross-origin</div>
+  <div class="nav-item" onclick="show('ab3', this)">U7 · srcdoc parent access</div>
   <div class="nav-section">Opener / Navigation</div>
-  <div class="nav-item" onclick="show('op1')">U8 · opener chain</div>
-  <div class="nav-item" onclick="show('op2')">U9 · window.name persist</div>
-  <div class="nav-item" onclick="show('op3')">U10 · history race</div>
+  <div class="nav-item" onclick="show('op1', this)">U8 · opener chain</div>
+  <div class="nav-item" onclick="show('op2', this)">U9 · window.name persist</div>
+  <div class="nav-item" onclick="show('op3', this)">U10 · history race</div>
   <div class="nav-section">document.domain</div>
-  <div class="nav-item" onclick="show('dd1')">U11 · domain relaxation</div>
-  <div class="nav-item" onclick="show('dd2')">U12 · document.domain=""</div>
+  <div class="nav-item" onclick="show('dd1', this)">U11 · domain relaxation</div>
+  <div class="nav-item" onclick="show('dd2', this)">U12 · document.domain=""</div>
   <div class="nav-section">postMessage</div>
-  <div class="nav-item" onclick="show('pm1')">U13 · origin=* apps</div>
-  <div class="nav-item" onclick="show('pm2')">U14 · targetOrigin bypass</div>
+  <div class="nav-item" onclick="show('pm1', this)">U13 · origin=* apps</div>
+  <div class="nav-item" onclick="show('pm2', this)">U14 · targetOrigin bypass</div>
   <div class="nav-section">Service Worker</div>
-  <div class="nav-item" onclick="show('sw1')">U15 · SW navigation</div>
+  <div class="nav-item" onclick="show('sw1', this)">U15 · SW navigation</div>
   <div class="nav-section">Sandbox Escape</div>
-  <div class="nav-item" onclick="show('sb1')">U16 · allow-scripts</div>
-  <div class="nav-item" onclick="show('sb2')">U17 · allow-top-nav</div>
+  <div class="nav-item" onclick="show('sb1', this)">U16 · allow-scripts</div>
+  <div class="nav-item" onclick="show('sb2', this)">U17 · allow-top-nav</div>
   <div class="nav-section">Utilities</div>
-  <div class="nav-item" onclick="show('env')">🔍 Env Check</div>
-  <div class="nav-item" onclick="show('notes')">📋 Notes</div>
+  <div class="nav-item" onclick="show('env', this)">🔍 Env Check</div>
+  <div class="nav-item" onclick="show('notes', this)">📋 Notes</div>
 </nav>
 
 <main class="main">
@@ -728,12 +728,12 @@ top.location = "javascript:alert(document.domain)";
 
 <script>
 // ─── nav ───
-function show(id) {
+function show(id, el) {
   document.querySelectorAll('.main > div').forEach(d => d.style.display = 'none');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const s = document.getElementById('sec-' + id);
   if (s) s.style.display = 'block';
-  if (event && event.target) event.target.classList.add('active');
+  if (el) el.classList.add('active');
 }
 
 // ─── log / result helpers ───
@@ -1241,7 +1241,7 @@ function testU8c() {
 // ─── U9: window.name ───
 function testU9() {
   const L = 'u9-log';
-  log(L, 'Setting window.name = "PAYLOAD_<script>alert(1)</script>"...', 'll-b');
+  log(L, 'Setting window.name = "<img src=x onerror=alert(1)>"...', 'll-b');
   const payload = '<img src=x onerror=alert("window.name_UXSS")>';
   window.name = payload;
   log(L, 'window.name set to: ' + window.name.substring(0,60), 'll-y');
